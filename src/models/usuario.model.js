@@ -13,6 +13,10 @@ import mongoose from "mongoose";
 // },{_id: false});
 
 const UserSchema = mongoose.Schema({
+    foto: {
+        type: String,
+        required: false
+    },
     nombre:{
         type: String,
         required:true
@@ -38,6 +42,19 @@ const UserSchema = mongoose.Schema({
     telefono: Number,
     direccion: String,
     evidencia: Array,
+    identificacion: Array,
+    asesorId: {
+        type: mongoose.Schema.ObjectId,
+        ref: 'usuarios',
+        required: false
+    },
+    clientes: [{
+        id: {
+            type: mongoose.Schema.ObjectId,
+            ref: 'usuarios',
+            required: false
+        }
+    }]
 }, { timestamps:true});
 
 export default mongoose.model("usuarios", UserSchema)
