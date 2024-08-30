@@ -6,7 +6,7 @@ const PrestamoSchema = mongoose.Schema({
         required:true
     },
     montoSolicitado:{
-        type: String,
+        type: Number,
         required:true
     },
     esquemaPago:{
