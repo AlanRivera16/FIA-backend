@@ -1,16 +1,5 @@
-import mongoose from "mongoose";
-
-// var dataSchema = mongoose.Schema({
-//     nombre:{
-//         type: String
-//     },
-//     telefono:{
-//         type: Number
-//     },
-//     correo:{
-//         type: String
-//     }
-// },{_id: false});
+import { ObjectId } from "mongodb";
+import mongoose, { Types } from "mongoose";
 
 const UserSchema = mongoose.Schema({
     nombre:{
@@ -34,9 +23,30 @@ const UserSchema = mongoose.Schema({
         type: Boolean,
         default: false
     },
-    saldo_asignado: Number,
-    telefono: Number,
-    direccion: String,
+    saldo_asignado: {
+        type: Number,
+        require: false
+    },
+    telefono: {
+        type: Number,
+        require: true
+    },
+    direccion: {
+        type: String,
+        require: true
+    },
+    id_historial: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'historial',
+    },
+    created_by: {
+        type: mongoose.Schema.Types.ObjectId,
+        require: true
+    },
+    assigned_to:{
+        type: mongoose.Schema.Types.ObjectId,
+        require: true
+    },
     evidencia: Array,
 }, { timestamps:true});
 

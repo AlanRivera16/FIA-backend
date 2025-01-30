@@ -4,6 +4,8 @@ import { connectDB } from './src/utils/conection-database.js'
 import { register, login } from './src/controllers/authControllers.js';
 import authRoutes from './src/routes/authRoutes.js';
 import usuariosRoute from './src/routes/usuarios.route.js'
+import prestamosRoute from './src/routes/prestamos.route.js'
+import historialRoute from './src/routes/historial.route.js'
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -28,6 +30,8 @@ app.get('/users', (req,res) => {
 
 app.use(authRoutes);
 app.use(usuariosRoute);
+app.use(prestamosRoute);
+app.use(historialRoute);
 
 // mongoose
 //   .connect(mongoUri)
