@@ -24,8 +24,10 @@ var subDoc = mongoose.Schema({
         required:false
     },
     multa: {
-        type: Number,
-        required:false
+        dia_retraso: { type: Number, default: 0 },
+        monto_pendiente: { type: Number, default: 0 },
+        saldado: { type: Boolean, default: false },
+        // required: false
     },
     notas: {
         type: String,
@@ -44,7 +46,7 @@ const PrestamoSchema = mongoose.Schema({
     },
     estado: {
         type: String,
-        default: 'Pendiente' // 'Aceptado' | 'Rechazado'
+        default: 'Pendiente' // 'Aceptado' | 'Rechazado' | 'Cerrado'
     },
     tipo_pago:{
         type: String,

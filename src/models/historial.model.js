@@ -44,14 +44,14 @@ const HistorialSchema = mongoose.Schema({
                 type: Date, // Fecha del retraso
                 required: true
             },
-            dias_retraso: {
-                type: Number, // Número de días de retraso
-                required: true
-            },
-            multa: {
-                type: Number, // Monto de la multa por el retraso
-                required: false
-            }
+            // dias_retraso: { //PUEDE NO SERVIR 
+            //     type: Number, // Número de días de retraso
+            //     required: true
+            // },
+            // multa: { //PUEDE NO SERVIR 
+            //     type: Number, // Monto de la multa por el retraso
+            //     required: false
+            // }
         }
     ],
     prestamos_detallados: [ // Lista simplificada de préstamos

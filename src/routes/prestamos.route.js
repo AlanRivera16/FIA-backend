@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getPrestamos, postPrestamo, putPrestamo, deletePrestamo, getPrestamoById, crearTabalAmortizacion, putTablaAmrPago, rechazarPrestamo } from "../controllers/prestamos.controller.js"
+import { getPrestamos, postPrestamo, putPrestamo, deletePrestamo, getPrestamoById, crearTabalAmortizacion, putTablaAmrPago, rechazarPrestamo, pagarMulta } from "../controllers/prestamos.controller.js"
 const router = Router()
 
 router.get('/prestamos', getPrestamos);
@@ -10,6 +10,7 @@ router.post('/prestamo', postPrestamo);
 
 router.put('/prestamo/:_id', putPrestamo);
 
+router.patch('/prestamo/pago/multa/:id_prestamo/:num_pago', pagarMulta);
 router.patch('/rechazar/prestamo/:_id', rechazarPrestamo)
 router.patch('/delete/prestamo/:_id', deletePrestamo);
 

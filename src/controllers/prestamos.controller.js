@@ -62,6 +62,38 @@ export const putPrestamo = async (req, res) => {
     }
 }
 
+export const pagarMulta = async (req, res) => {
+    try {
+        const { id_prestamo, num_pago } = req.params;
+
+        // Buscar el préstamo y actualizar la multa del pago específico
+        const prestamo = await Prestamo.findOneAndUpdate(
+            { _id: id_prestamo, "tabla_amortizacion.num_pago": num_pago }, 
+            {
+                $set: {
+                    "tabla_amortizacion.$.multa.saldado": true,
+                    "tabla_amortizacion.$.multa.monto_pendiente": 0
+                }
+            },
+            { new: true } // Para devolver el documento actualizado
+        );
+
+        if (!prestamo) {
+            return res.status(404).json({ message: "Préstamo o pago no encontrado" });
+        }
+
+        // Extraer solo la multa del pago actualizado
+        // const multaActualizada = prestamo.tabla_amortizacion[0].multa;
+        const multa_actualizada = prestamo.tabla_amortizacion[num_pago - 1].multa
+
+        res.json({ message: "Multa pagada con éxito", multa: multa_actualizada });
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Error en el servidor" });
+    }
+}
+
 export const rechazarPrestamo = async (req, res) => {
     try {
         const rejectedPrestamo = await Prestamo.findByIdAndUpdate(

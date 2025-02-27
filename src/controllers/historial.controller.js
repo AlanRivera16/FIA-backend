@@ -24,18 +24,19 @@ export const postHistorial =  async (req, res) => {
     }
 }
 
-async function registrarRetraso(idUsuario, idPrestamo, numPago, diasRetraso, multa = 0) {
+// export const registrarRetraso = async (idUsuario, idPrestamo, numPago, diasRetraso) => {
+export const registrarRetraso = async (req, res) => {
     await Historial.updateOne(
-        { id_usuario: idUsuario },
+        { id_usuario: req.params.id },
         {
             $inc: { retrasos_totales: 1 },
             $push: {
                 detalles_retrasos: {
-                    id_prestamo: idPrestamo,
-                    num_pago: numPago,
+                    id_prestamo: req.body.idPrestamo,
+                    num_pago: req.body.numPago,
                     fecha_retraso: new Date(),
-                    dias_retraso: diasRetraso,
-                    multa: multa
+                    // dias_retraso: diasRetraso,
+                    // multa: multa
                 }
             }
         }
