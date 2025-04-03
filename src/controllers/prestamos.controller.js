@@ -1,8 +1,20 @@
 import Prestamo from "../models/prestamo.model.js"
+import Historial from "../models/historial.model.js"
 
 export const getPrestamos = async (req, res) => {
     try {
-        const prestamos = await Prestamo.find({ deleteStatus:false });
+        const prestamos = await Prestamo.find({ deleteStatus: false })
+        //    .populate('id_cliente', 'nombre')
+        //    .lean(); // 👈 Convierte los documentos en objetos JS puros
+
+        // Modificamos la respuesta para conservar id_cliente y agregar cliente_nombre
+        //const prestamosConNombre = prestamos.map(prestamo => ({
+        //    ...prestamo,
+        //    cliente_nombre: prestamo.id_cliente.nombre, // Agregamos el nombre
+        //    id_cliente: prestamo.id_cliente._id // Restauramos el ID original
+        //}));        
+
+        //console.log([prestamosConNombre]);
         res.send(prestamos);
     } catch (error) {
         res.status(500).send(error);
@@ -72,7 +84,8 @@ export const pagarMulta = async (req, res) => {
             {
                 $set: {
                     "tabla_amortizacion.$.multa.saldado": true,
-                    "tabla_amortizacion.$.multa.monto_pendiente": 0
+                    //"tabla_amortizacion.$.multa.monto_pendiente": 0, //Por ahora no se usa debido al front para mostrar el historial de las multas
+                    "tabla_amortizacion.$.multa.fecha_pago": new Date()
                 }
             },
             { new: true } // Para devolver el documento actualizado
@@ -126,7 +139,7 @@ export const crearTabalAmortizacion = async (req, res) => {
         const prestamo = await Prestamo.findById(req.params);//Data del prestamo 
         if(prestamo.tabla_amortizacion.length == 0){ //Si no hay una tabla de amortización aún
             const tabla = await generarTablaAmor(prestamo.saldo, prestamo.periodo, req.body.fecha_prestamo, req.body.dia_pago)
-            // console.log(prestamo);
+            console.log(prestamo);
             // console.log(tabla);
 
             const updateTablePrest = await Prestamo.findByIdAndUpdate(
@@ -134,10 +147,32 @@ export const crearTabalAmortizacion = async (req, res) => {
                 { 
                     tabla_amortizacion: tabla, 
                     estado : 'Aceptado',
-                    fecha_prestamo: new Date(req.body.fecha_prestamo + 'T00:00:00-06:00')
+                    //fecha_prestamo: new Date(req.body.fecha_prestamo + 'T00:00:00-06:00')
+                    fecha_prestamo: new Date(req.body.fecha_prestamo)
                 },
                 { new: true }
             );
+
+            // UPDATE HISTORIAL DE PRESTAMOS ADD PRESTAMOS DETALLADOS
+            await Historial.updateOne(
+                { id_usuario: prestamo.id_cliente },
+                {   
+                    $inc: { 
+                        prestamos_totales: 1, // Incrementar el total de préstamos
+                        prestamos_activos: 1, // Incrementar el total de préstamos activos
+                        monto_total_prestado: prestamo.saldo // Incrementar el monto total prestado
+                    },
+                    $push: {
+                        prestamos_detallados: {
+                            id_prestamo: prestamo._id,
+                            saldo_pendiente: prestamo.saldo,
+                            estado: updateTablePrest.estado,
+                            fecha_inicio: new Date().toLocaleDateString('en-CA')
+                        }
+                    }
+                }
+            );
+
             res.json(updateTablePrest)
         } else{
         res.send({message:'Ya existe una tabla de amortización'})

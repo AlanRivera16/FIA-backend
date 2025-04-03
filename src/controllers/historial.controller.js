@@ -9,6 +9,24 @@ export const getHistorial = async (req, res) => {
     }
 }
 
+export const getHistorialById = async (req, res) => {
+    try {
+        const historial = await Historial.findById(req.params.id);
+        res.send(historial);
+    } catch (error) {
+        res.status(500).send
+    }
+}
+
+export const getHistorialByUserId = async (req, res) => {
+    try {
+        const historial = await Historial.findOne({ id_usuario: req.params.id });
+        res.send(historial);
+    } catch (error) {
+        res.status(500).send(error);
+    }
+}
+
 export const postHistorial =  async (req, res) => {
     try {
 

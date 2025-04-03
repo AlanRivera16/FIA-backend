@@ -1,0 +1,9 @@
+
+
+
+get http://localhost:3000/historial/user/67784a9308be13c7d8ae3956
+
+###
+
+GET http://localhost:3000/prestamos
+

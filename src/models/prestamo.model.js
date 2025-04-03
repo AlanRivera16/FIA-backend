@@ -17,16 +17,27 @@ var subDoc = mongoose.Schema({
     },
     estado_pago:{
         type: String,
-        default: 'No pagado' // 'Pagado' | 'Pendiente'
+        default: 'No pagado' // 'Pagado' | 'Pendiente Bueno' | 'Pendiente Malo'
     },
     abono_pago: {
         type: Number,
         required:false
+        // DESPUES DE PRESENTAR ESTO
+        // Puede que se agregue el mismo esquema de detalle_retrasos o prestamos_detallados
+        //$inc: { retrasos_totales: 1 }, // Incrementar el total de retrasos
+        //$push: {
+        //    detalles_retrasos: {
+        //      id_prestamo: prestamo._id,
+        //      num_pago: pago.num_pago,
+        //      fecha_retraso: hoy
+        //    }
+        //  }
     },
     multa: {
         dia_retraso: { type: Number, default: 0 },
         monto_pendiente: { type: Number, default: 0 },
         saldado: { type: Boolean, default: false },
+        fecha_pago: { type: Date, default: null },
         // required: false
     },
     notas: {
@@ -66,6 +77,7 @@ const PrestamoSchema = mongoose.Schema({
     },
     id_cliente:{
         type: ObjectId,
+        ref: 'usuarios',
         required: true
     },
     tabla_amortizacion:[subDoc],

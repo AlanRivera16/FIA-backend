@@ -30,7 +30,8 @@ const HistorialSchema = mongoose.Schema({
         default: 'Bueno'
     },
     detalles_retrasos: [ // Registro de pagos atrasados para análisis detallado
-        {
+        {   
+            _id: false,
             id_prestamo: {
                 type: mongoose.Schema.Types.ObjectId,
                 ref: 'Prestamo', // Relación con la colección Prestamos
@@ -56,6 +57,7 @@ const HistorialSchema = mongoose.Schema({
     ],
     prestamos_detallados: [ // Lista simplificada de préstamos
         {
+            _id: false,
             id_prestamo: {
                 type: mongoose.Schema.Types.ObjectId,
                 ref: 'Prestamo',
