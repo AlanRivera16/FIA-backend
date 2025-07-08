@@ -1,13 +1,14 @@
 import express from 'express';
 import mongoose from 'mongoose';
 import {monstrarMesaje} from './funciones.js'
+import {MONGODB_URI} from './src/config.js'
 
 const app = express();
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-mongoose.connect('mongodb+srv://financieraindependienteags:Ft9F1pU5PcVZ9PcK@cluster0.d0dysl4.mongodb.net/?retryWrites=true&w=majority')
+mongoose.connect(MONGODB_URI)
   .then(() => console.log('MongoDB connected'))
   .catch(err => console.log(err));
 

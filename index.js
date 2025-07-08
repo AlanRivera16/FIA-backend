@@ -10,12 +10,13 @@ import dotenv from 'dotenv';
 import cron from 'node-cron'
 import Prestamo from "../fia-backend-app/src/models/prestamo.model.js"
 import Historial from "../fia-backend-app/src/models/historial.model.js"
-import { calcularEstadoGeneral } from "../fia-backend-app/funciones.js"
+import { calcularEstadoGeneral, calcular15Semana } from "../fia-backend-app/funciones.js"
+import fileUpload from 'express-fileupload';
 
 
 dotenv.config();
 
-cron.schedule('36 23 * * *', async () =>{
+cron.schedule('17 19 * * *', async () =>{
   console.log('⏳ Ejecutando tarea automática para verificar pagos vencidos...')
 
   try {
@@ -48,6 +49,29 @@ cron.schedule('36 23 * * *', async () =>{
     // Actualizar cada pago vencido con multa e interés
     for (const prestamo of prestamosVencidos) {
       const idCliente = prestamo.id_cliente; // Obtener ID del cliente
+
+      //Calcular 15va semana
+      if(prestamo.periodo == 14){
+        await calcular15Semana(prestamo);
+      }
+
+      // Calcular estado general del cliente
+      const historialActualizado = await Historial.findOne({ id_usuario: idCliente }); // 🔹 **Obtener historial actualizado**
+
+      if (historialActualizado) {
+        // 🔹 **Calcular estado general**
+        const estadoGeneral = calcularEstadoGeneral(historialActualizado);
+        console.log(estadoGeneral)
+
+        // 🔹 **Actualizar estado en historial**
+        await Historial.updateOne(
+          { id_usuario: idCliente },
+          { $set: { estado_general: estadoGeneral } }
+        );
+
+        console.log(`📊 Estado general actualizado: ${estadoGeneral} para el cliente ${idCliente}`);
+      }
+
 
       for (const pago of prestamo.tabla_amortizacion) {
         const fechaPago = new Date(pago.fecha_pago); // Convertimos la fecha de pago
@@ -102,23 +126,6 @@ cron.schedule('36 23 * * *', async () =>{
             console.log(`📌 Retraso registrado en historial del cliente ${idCliente} para pago ${pago.num_pago}`);
           }
 
-          // Calcular estado general del cliente
-          const historialActualizado = await Historial.findOne({ id_usuario: idCliente }); // 🔹 **Obtener historial actualizado**
-
-          if (historialActualizado) {
-            // 🔹 **Calcular estado general**
-            const estadoGeneral = calcularEstadoGeneral(historialActualizado);
-            console.log(estadoGeneral)
-
-            // 🔹 **Actualizar estado en historial**
-            await Historial.updateOne(
-              { id_usuario: idCliente },
-              { $set: { estado_general: estadoGeneral } }
-            );
-
-            console.log(`📊 Estado general actualizado: ${estadoGeneral} para el cliente ${idCliente}`);
-          }
-
         }
       }
 
@@ -138,6 +145,10 @@ app.use(cors());
 //middlewares
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
+app.use(fileUpload({
+    useTempFiles : true,
+    tempFileDir : './uploads'
+}));
 
 //settings routes
 app.post('/register', register);

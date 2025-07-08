@@ -7,3 +7,35 @@ get http://localhost:3000/historial/user/67784a9308be13c7d8ae3956
 
 GET http://localhost:3000/prestamos
 
+###
+
+GET http://localhost:3000/usuarios/clientes/6463e9fb20a73c4bfb7c5483
+
+
+###
+
+POST http://localhost:3000/usuarios
+Content-Type: application/json
+
+{
+    "nombre": "Savannah",
+    "email": "savannahsueyong.gmail.com",
+    "password": "123A&A",
+    "role": "CLIENTE",
+    "saldo_asignado": 10000,
+    "telefono": 4961368965,
+    "direccion": "NA",
+    "created_by": "6463debc096500b73df445b5",
+    "assigned_to":"6463e9fb20a73c4bfb7c5483"
+}
+
+###
+
+
+POST http://localhost:3000/usuarios/img
+Content-Disposition: form-data; name="image"; filename="1.png"
+Content-Type: image/png
+
+{
+
+}

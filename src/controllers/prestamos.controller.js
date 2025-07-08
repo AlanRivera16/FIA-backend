@@ -107,6 +107,7 @@ export const pagarMulta = async (req, res) => {
     }
 }
 
+
 export const rechazarPrestamo = async (req, res) => {
     try {
         const rejectedPrestamo = await Prestamo.findByIdAndUpdate(
@@ -117,6 +118,21 @@ export const rechazarPrestamo = async (req, res) => {
             { new: true }
         );
         res.json(rejectedPrestamo)
+    } catch (error) {
+        res.status(500).send(error)
+    }
+}
+
+export const cerrarPago = async (req, res) => {
+    try {
+        const cerrarPrestamo = await Prestamo.findByIdAndUpdate(
+            req.params, 
+            {
+                estado : 'Cerrado'
+            },
+            { new: true }
+        );
+        res.json(cerrarPrestamo)
     } catch (error) {
         res.status(500).send(error)
     }
