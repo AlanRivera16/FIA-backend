@@ -11,12 +11,13 @@ import cron from 'node-cron'
 import Prestamo from "../fia-backend-app/src/models/prestamo.model.js"
 import Historial from "../fia-backend-app/src/models/historial.model.js"
 import { calcularEstadoGeneral, calcular15Semana } from "../fia-backend-app/funciones.js"
+import { calcularTotales } from '../fia-backend-app/src/controllers/prestamos.controller.js'
 import fileUpload from 'express-fileupload';
 
 
 dotenv.config();
-
-cron.schedule('17 19 * * *', async () =>{
+        // minute / hour / day / month / day 
+cron.schedule('18 16 * * *', async () =>{
   console.log('⏳ Ejecutando tarea automática para verificar pagos vencidos...')
 
   try {
@@ -129,8 +130,28 @@ cron.schedule('17 19 * * *', async () =>{
         }
       }
 
-      // Guardar cambios en el préstamo
+      // Al final, recalcula los totales
+      const { totalPagado, totalCuota, totalMultas, totalPendiente } = calcularTotales(prestamo.tabla_amortizacion);
+
+      prestamo.totalPagado = totalPagado;
+      prestamo.totalCuota = totalCuota;
+      prestamo.totalMultas = totalMultas;
+      prestamo.totalPendiente = totalPendiente;
       await prestamo.save();
+
+      // Actualiza el historial
+      await Historial.updateOne(
+        { id_usuario: prestamo.id_cliente, "prestamos_detallados.id_prestamo": prestamo._id },
+        {
+          $set: {
+            "prestamos_detallados.$.saldo_pendiente": totalPendiente,
+            "prestamos_detallados.$.multas_pendientes": totalMultas,
+            "prestamos_detallados.$.pagos_pendientes": totalCuota,
+            "prestamos_detallados.$.total_pagado": totalPagado,
+            "prestamos_detallados.$.estado": prestamo.estado
+          }
+        }
+      );
     }
     // console.log(prestamosVencidos)
     console.log(`✅ ${prestamosVencidos.length} préstamos actualizados.`);

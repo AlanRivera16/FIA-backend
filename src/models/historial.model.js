@@ -63,10 +63,26 @@ const HistorialSchema = mongoose.Schema({
                 ref: 'Prestamo',
                 required: true
             },
-            saldo_pendiente: {
+            saldo_pendiente: { //(-Deuda total- from Prestamos page modal prestamo/segment Actividad)
                 type: Number, // Saldo que aún debe el cliente
                 required: true
             },
+            multas_pendientes: {
+                type: Number,
+                require: true
+            },
+            pagos_pendientes: {
+                type: Number,
+                require: true
+            },
+            total_pagado: {
+                type: Number,
+                require: true
+            },
+            // pagos_pendientes: {
+            //     type: Number,
+            //     require: true
+            // },
             estado: {
                 type: String, // Estado actual del préstamo (Pendiente, Aceptado, Rechazado)
                 required: true

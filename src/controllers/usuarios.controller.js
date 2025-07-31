@@ -34,7 +34,7 @@ export const getAsesores = async (req, res) => {
         res.status(500).send(error);
     }
 }
-export const getClientesById = async (req, res) => {
+export const getClientesByIdAssigned = async (req, res) => {
     try {
         const clientes = await Usuario.find({ 
             deleteStatus:false,

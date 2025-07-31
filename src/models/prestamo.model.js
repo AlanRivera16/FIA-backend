@@ -73,6 +73,7 @@ const PrestamoSchema = mongoose.Schema({
     },
     id_asesor:{
         type: ObjectId,
+        ref: 'usuarios',
         required: true
     },
     id_cliente:{
@@ -84,7 +85,11 @@ const PrestamoSchema = mongoose.Schema({
     deleteStatus: {
         type: Boolean,
         default: false
-    }
+    },
+    totalPagado: { type: Number, default: 0 },
+    totalCuota: { type: Number, default: 0 },
+    totalMultas: { type: Number, default: 0 },
+    totalPendiente: { type: Number, default: 0 },
 }, { timestamps:true});
 
 export default mongoose.model("prestamos", PrestamoSchema)

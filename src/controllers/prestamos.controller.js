@@ -21,20 +21,37 @@ export const getPrestamos = async (req, res) => {
     }
 }
 
+export const getPrestamosWithAsesor = async (req, res) => {
+    try {
+        // const resultado = await Prestamo.aggregate(
+        // [
+        //     {
+        //         $lookup:{
+        //             from: "usuarios",
+        //             localField: "id_asesor",
+        //             foreignField: "_id",
+        //             as: "asesor_data"
+        //         }
+        //     }
+        // ]);
+        // res.send(resultado);
+        const prestamos = await Prestamo.find()
+            .populate('id_asesor')   // Trae la info del asesor
+            .populate('id_cliente'); // Trae la info del cliente
+        res.json(prestamos);
+    } catch (error) {
+        res.status(500).send(error);
+    }
+}
+
 export const getPrestamoById = async (req, res) => {
     try {
-        const resultado = await Prestamo.aggregate(
-        [
-            {
-                $lookup:{
-                    from: "usuarios",
-                    localField: "id_asesor",
-                    foreignField: "_id",
-                    as: "asesor_data"
-                }
-            }
-        ]);
-        res.send(resultado);
+        // Asegúrate de que el id es un ObjectId válido
+        // const mongoose = require('mongoose');
+        // const id = mongoose.Types.ObjectId(req.params._id);
+
+        const result = await Prestamo.findById(req.params)
+        res.send(result); // Devuelve solo el objeto, no un array
     } catch (error) {
         res.status(500).send(error);
     }
@@ -95,11 +112,41 @@ export const pagarMulta = async (req, res) => {
             return res.status(404).json({ message: "Préstamo o pago no encontrado" });
         }
 
+        // Recalcula los totales
+        const { totalPagado, totalCuota, totalMultas, totalPendiente } = calcularTotales(prestamo.tabla_amortizacion);
+
+        prestamo.totalPagado = totalPagado;
+        prestamo.totalCuota = totalCuota;
+        prestamo.totalMultas = totalMultas;
+        prestamo.totalPendiente = totalPendiente;
+        await prestamo.save();
+
+        // Actualiza el historial
+        await Historial.updateOne(
+            { id_usuario: prestamo.id_cliente, "prestamos_detallados.id_prestamo": prestamo._id },
+            {
+                $set: {
+                    "prestamos_detallados.$.saldo_pendiente": totalPendiente,
+                    "prestamos_detallados.$.multas_pendientes": totalMultas,
+                    "prestamos_detallados.$.pagos_pendientes": totalCuota,
+                    "prestamos_detallados.$.total_pagado": totalPagado,
+                    "prestamos_detallados.$.estado": prestamo.estado
+                }
+            }
+        );
+
         // Extraer solo la multa del pago actualizado
         // const multaActualizada = prestamo.tabla_amortizacion[0].multa;
         const multa_actualizada = prestamo.tabla_amortizacion[num_pago - 1].multa
 
-        res.json({ message: "Multa pagada con éxito", multa: multa_actualizada });
+        res.json({ 
+            message: "Multa pagada con éxito", 
+            multa: multa_actualizada,
+            totalPagado,
+            totalCuota,
+            totalMultas,
+            totalPendiente
+        });
 
     } catch (error) {
         console.error(error);
@@ -200,14 +247,54 @@ export const crearTabalAmortizacion = async (req, res) => {
 
 export const putTablaAmrPago = async (req, res) => {
     try {
+
+        // 1. Actualiza la tabla
         const updateTablaAmortz = await Prestamo.findByIdAndUpdate(req.params, 
             req.body, 
             {new: true}
         );
+
+        // 2. Calcula los totales (podemos reutilizar la lógica del front aquí)
+        const { totalPagado, totalCuota, totalMultas, totalPendiente } = calcularTotales(updateTablaAmortz.tabla_amortizacion);
+
+        // 3. Actualiza el préstamo con los totales
+        updateTablaAmortz.totalPagado = totalPagado;
+        updateTablaAmortz.totalCuota = totalCuota;
+        updateTablaAmortz.totalMultas = totalMultas;
+        updateTablaAmortz.totalPendiente = totalPendiente;
+        await updateTablaAmortz.save();
+
+        // 4. Actualiza el historial
+        await Historial.updateOne(
+            { id_usuario: updateTablaAmortz.id_cliente, "prestamos_detallados.id_prestamo": updateTablaAmortz._id },
+            {
+                $set: {
+                    "prestamos_detallados.$.saldo_pendiente": totalPendiente,
+                    "prestamos_detallados.$.multas_pendientes": totalMultas,
+                    "prestamos_detallados.$.pagos_pendientes": totalCuota,
+                    "prestamos_detallados.$.total_pagado": totalPagado,
+                    "prestamos_detallados.$.estado": updateTablaAmortz.estado
+                }
+            }
+        );
+
         res.json(updateTablaAmortz);
     } catch (error) {
         res.status(500).send(error);
     }
+}
+
+// Función para calcular los totales (podemos reutilizar la lógica del front aquí)
+export function calcularTotales(tabla) {
+    let totalPagado = 0, totalCuota = 0, totalMultas = 0, totalPendiente = 0;
+    for (let pago of tabla) {
+        totalCuota += pago.cuota;
+        if(!pago.multa?.saldado) totalMultas += pago.multa?.monto_pendiente || 0;
+        if (pago.estado_pago === 'Pagado' || pago.multa?.saldado) totalPagado += pago.cuota + (pago.multa?.monto_pendiente || 0);
+        if (pago.estado_pago === 'No pagado') totalPendiente += pago.cuota;
+        if (pago.estado_pago === 'Pendiente' && pago.abono_pago) totalPendiente += (pago.cuota - pago.abono_pago)
+    }
+    return { totalPagado, totalCuota, totalMultas, totalPendiente };
 }
 
 const generarTablaAmor = async (monto, periodo, fecha, dia_semana) =>{
