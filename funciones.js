@@ -1,4 +1,4 @@
-import Prestamo from "../fia-backend-app/src/models/prestamo.model.js"
+import Prestamo from "./src/models/prestamo.model.js"
 //export function monstrarMesaje(){
 //    console.log("Hola desde el archivo funcuiones.js")
 //}

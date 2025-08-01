@@ -8,10 +8,10 @@ import prestamosRoute from './src/routes/prestamos.route.js'
 import historialRoute from './src/routes/historial.route.js'
 import dotenv from 'dotenv';
 import cron from 'node-cron'
-import Prestamo from "../fia-backend-app/src/models/prestamo.model.js"
-import Historial from "../fia-backend-app/src/models/historial.model.js"
-import { calcularEstadoGeneral, calcular15Semana } from "../fia-backend-app/funciones.js"
-import { calcularTotales } from '../fia-backend-app/src/controllers/prestamos.controller.js'
+import Prestamo from "./src/models/prestamo.model.js"
+import Historial from "./src/models/historial.model.js"
+import { calcularEstadoGeneral, calcular15Semana } from "./funciones.js"
+import { calcularTotales } from './src/controllers/prestamos.controller.js'
 import fileUpload from 'express-fileupload';
 
 
