@@ -51,6 +51,7 @@ export const getPrestamoById = async (req, res) => {
         // const id = mongoose.Types.ObjectId(req.params._id);
 
         const result = await Prestamo.findById(req.params)
+        .populate('id_asesor'); // Esto trae el objeto asesor completo
         res.send(result); // Devuelve solo el objeto, no un array
     } catch (error) {
         res.status(500).send(error);
