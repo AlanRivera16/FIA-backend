@@ -6,6 +6,8 @@ import authRoutes from './src/routes/authRoutes.js';
 import usuariosRoute from './src/routes/usuarios.route.js'
 import prestamosRoute from './src/routes/prestamos.route.js'
 import historialRoute from './src/routes/historial.route.js'
+import walletRoute from './src/routes/wallet.route.js'
+import notificacionesRoute from './src/routes/notificaciones.route.js';
 import dotenv from 'dotenv';
 import cron from 'node-cron'
 import Prestamo from "./src/models/prestamo.model.js"
@@ -13,6 +15,9 @@ import Historial from "./src/models/historial.model.js"
 import { calcularEstadoGeneral, calcular15Semana } from "./funciones.js"
 import { calcularTotales } from './src/controllers/prestamos.controller.js'
 import fileUpload from 'express-fileupload';
+import Notificacion from './src/models/notificaciones.model.js';
+import { generarMensajeNotificacion } from './src/utils/notificaciones.utils.js';
+import Usuario from './src/models/usuario.model.js';
 
 
 dotenv.config();
@@ -186,6 +191,8 @@ app.use(authRoutes);
 app.use(usuariosRoute);
 app.use(prestamosRoute);
 app.use(historialRoute);
+app.use(walletRoute);
+app.use(notificacionesRoute)
 
 // mongoose
 //   .connect(mongoUri)

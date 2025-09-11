@@ -3,6 +3,9 @@ import Usuario from "../models/usuario.model.js"
 import Historial from "../models/historial.model.js"
 import {removeImage, uploadImage} from "../utils/cloudinary.js"
 import fs from 'fs-extra'
+import { generarMensajeNotificacion } from '../utils/notificaciones.utils.js';
+import Notificacion from '../models/notificaciones.model.js';
+
 
 export const getUsuarios = async (req, res) => {
     try {
@@ -45,12 +48,58 @@ export const getClientesByIdAssigned = async (req, res) => {
         res.status(500).send(error);
     }
 }
+export const getClientesNoAssigned = async (req, res) => {
+    try {
+        const SUPERUSER_ID = process.env.SUPERUSER_ID;
+        const clientes = await Usuario.find({ 
+            deleteStatus: false,
+            role: "CLIENTE",
+            $or: [
+                { assigned_to: SUPERUSER_ID },
+                { assigned_to: { $exists: false } },
+                { assigned_to: null }
+            ]
+        });
+        res.send(clientes);
+    } catch (error) {
+        res.status(500).send(error);
+    }
+}
+export const getClientesBaja = async (req, res) => {
+    try {
+        const usuario = await Usuario.find({ 
+            deleteStatus:true,
+        });
+        res.send(usuario);
+    } catch (error) {
+        res.status(500).send(error);
+    }
+}
 
 export const postUsuario = async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
 
     try {
+        let { password, role } = req.body;
+        // Si es asesor y no se envió password, genera uno aleatorio
+        if (role === 'ASESOR' && !password) {
+            password = generarPasswordAleatoria();
+            req.body.password = password;
+        }
+        
+        // Validar si ya existe un usuario con el mismo CURP
+        if (req.body.curp) {
+            const usuarioExistente = await Usuario.findOne({ curp: req.body.curp });
+            if (usuarioExistente) {
+                await session.abortTransaction();
+                session.endSession();
+                return res.status(403).json({
+                    message: 'No se puede dar de alta el usuario porque ya existe un usuario con ese CURP.'
+                });
+            }
+        }
+
         // 1. Reconstruir aval_info desde el body
         const aval_info = {
             nombre_aval: req.body.nombre_aval,
@@ -132,6 +181,14 @@ export const postUsuario = async (req, res) => {
         console.error('Error en postUsuario:', error);
         res.status(500).json({ message: 'Error al crear usuario', error: error.message, stack: error.stack });
     }
+}
+function generarPasswordAleatoria(length = 8) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let password = '';
+  for (let i = 0; i < length; i++) {
+    password += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return password;
 }
 
 export const uploadIMAGEN = async (req, res) => {
@@ -262,11 +319,76 @@ export const putUsuario = async (req, res) => {
 
 export const deleteUsuario = async (req, res) => {
     try {
+        const usuario = await Usuario.findById(req.params.id);
+        if (!usuario) return res.status(404).json({ message: "Usuario no encontrado" });
+
+        // Si es asesor, reasigna sus clientes
+        if (usuario.role === 'ASESOR') {
+            const SUPERUSER_ID = process.env.SUPERUSER_ID;
+            await Usuario.updateMany(
+                { assigned_to: usuario._id, role: "CLIENTE" },
+                { $set: { assigned_to: SUPERUSER_ID } }
+            );
+        }
+
+        // Elimina lógicamente el usuario
         const deletedUsuario = await Usuario.findByIdAndUpdate(req.params.id, {
             deleteStatus: true
         });
+
         res.json(deletedUsuario);
     } catch (error) {
         res.status(500).send(error);
     }
 }
+
+export const asignarAsesorAClientes = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  try {
+    const { clienteIds, asesorId } = req.body; // clienteIds: array de IDs, asesorId: string
+
+    if (!Array.isArray(clienteIds) || !asesorId) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ message: 'Datos inválidos' });
+    }
+
+    const result = await Usuario.updateMany(
+      { _id: { $in: clienteIds } },
+      { $set: { assigned_to: asesorId } },
+      { session }
+    );
+
+    // Obtener datos de los clientes asignados
+    const clientesData = await Usuario.find({ _id: { $in: clienteIds } }, 'nombre').session(session);
+    console.log(clientesData.length)
+    
+    // Generar mensaje de notificación
+    const mensaje = generarMensajeNotificacion({
+        type: 'asignacion',
+        data: { clientesData },
+        from: null,
+        to: null
+    });
+    console.log(mensaje)
+
+    // Crear notificación para el asesor
+    await Notificacion.create([{
+      type: 'otro',
+      userId: asesorId,
+      from: process.env.SUPERUSER_ID,
+      mensaje,
+      data: { clientes: clienteIds }
+    }], { session });
+
+    await session.commitTransaction();
+    session.endSession();
+
+    res.json({ message: 'Clientes asignados correctamente', result, clientesData });
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    res.status(500).json({ message: 'Error al asignar asesor', error: error.message });
+  }
+};

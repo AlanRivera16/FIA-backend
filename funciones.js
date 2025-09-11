@@ -1,4 +1,7 @@
 import Prestamo from "./src/models/prestamo.model.js"
+import Notificacion from './src/models/notificaciones.model.js';
+import { generarMensajeNotificacion } from './src/utils/notificaciones.utils.js';
+import Usuario from './src/models/usuario.model.js';
 //export function monstrarMesaje(){
 //    console.log("Hola desde el archivo funcuiones.js")
 //}
@@ -67,6 +70,30 @@ export const calcular15Semana = async (prestamo) => {
                   }
                 }
               );
+          // Crear notificación de retraso para el super usuario
+          try {
+            const superUserId = process.env.SUPERUSER_ID;
+            const cliente = await Usuario.findById(prestamo.id_cliente);
+            if (cliente && superUserId) {
+              const mensaje = generarMensajeNotificacion({
+                type: 'retraso',
+                data: { monto_prestamo: prestamo.saldo },
+                from: cliente,
+                to: null
+              });
+
+              await Notificacion.create({
+                type: 'retraso',
+                userId: superUserId,
+                from: cliente._id,
+                mensaje,
+                data: { id_prestamo: prestamo._id }
+              });
+              console.log(`🔔 Notificación de retraso creada para el super usuario por el préstamo ${prestamo._id}`);
+            }
+          } catch (err) {
+            console.error('❌ Error al crear notificación de retraso:', err);
+          }
     
             console.log(`🟢 Nuevo pago agregado (num_pago: ${nuevoNumPago}) para préstamo ${prestamo._id}`);
         }

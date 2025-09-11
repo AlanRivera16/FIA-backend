@@ -5,19 +5,19 @@ var evidenciaAval = mongoose.Schema({
     _id:false,
     nombre_aval: {
         type: String,
-        required: true
+        required: false
     },
     telefono_aval: {
         type: Number,
-        required: true
+        required: false
     },
     email_aval: {
         type: String,
-        required: true
+        required: false
     },
     direccion_aval: {
         type: String,
-        required: true
+        required: false
     },
     evidencia_fotos: Array,
 });
@@ -27,6 +27,11 @@ const UserSchema = mongoose.Schema({
         type: String,
         required:true
     },
+    curp:{
+        type: String,
+        required: false,
+        unique:true
+    },
     email:{
         type: String,
         unique: true,
@@ -34,7 +39,7 @@ const UserSchema = mongoose.Schema({
     },
     password: {
         type: String,
-        required: true
+        required: false
     },
     role:{
         type: String,
@@ -71,20 +76,20 @@ const UserSchema = mongoose.Schema({
     aval_info: {
         nombre_aval: {
             type: String,
-            required: true
+            required: false
         },
         email_aval: {
             type: String,
             unique: true,
-            required: true
+            required: false
         },
         telefono_aval: {
             type: Number,
-            require: true
+            require: false
         },
         direccion_aval: {
             type: String,
-            require: true
+            require: false
         },
         evidencia_aval: Array
     },

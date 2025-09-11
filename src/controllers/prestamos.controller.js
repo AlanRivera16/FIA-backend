@@ -1,5 +1,10 @@
 import Prestamo from "../models/prestamo.model.js"
 import Historial from "../models/historial.model.js"
+import Wallet from "../models/wallet.model.js";
+import Usuario from "../models/usuario.model.js"
+import { generarMensajeNotificacion } from '../utils/notificaciones.utils.js';
+import Notificacion from '../models/notificaciones.model.js';
+import mongoose from "mongoose";
 
 export const getPrestamos = async (req, res) => {
     try {
@@ -58,26 +63,161 @@ export const getPrestamoById = async (req, res) => {
     }
 }
 
-export const postPrestamo = async (req, res) => {
+export const getPrestamosByAsesor = async (req, res) => {
     try {
-        
-      req.body.tipo_pago = (req.body.periodo > 6) ? 'Semanal' : 'Mensual';
-      const prestamo = new Prestamo({
-        saldo: req.body.saldo,
-        // estado: req.body.estado,
-        tipo_pago: req.body.tipo_pago,
-        periodo: req.body.periodo,
-        dia_pago: req.body.dia_pago,
-        id_asesor: req.body.id_asesor,
-        id_cliente: req.body.id_cliente,
-        // tabla_amortizacion: req.body,
-      });
-
-      const prestamoSaved = await prestamo.save();
-      res.json(prestamoSaved);
-
+        const prestamos = await Prestamo.find({ 
+            deleteStatus:false,
+            id_asesor: req.params
+        })
+        .populate('id_asesor')   // Trae la info del asesor
+        .populate('id_cliente'); // Trae la info del cliente
+        res.send(prestamos);
     } catch (error) {
-      res.status(500).send(error);
+        res.status(500).send(error);
+    }
+}
+
+export const postPrestamo = async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+        // 1. Validar wallet activa
+        const superUserId = process.env.SUPERUSER_ID;
+        const wallet = await Wallet.findOne({ owner: superUserId });
+        if (!wallet || !wallet.activa) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(403).json({ message: 'La wallet está apagada. No se pueden otorgar préstamos.' });
+        }
+        // Validar fondos suficientes
+        if (wallet.saldo < req.body.saldo) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(403).json({ message: 'Fondos insuficientes en la wallet para otorgar el préstamo.' });
+        }
+
+        // 2. Consultar historial del cliente
+        const historial = await Historial.findOne({ id_usuario: req.body.id_cliente }).session(session);
+        const estadoCliente = historial ? historial.estado_general : null;
+
+        // 3. Preparar datos del préstamo
+        req.body.tipo_pago = (req.body.periodo > 6) ? 'Semanal' : 'Mensual';
+        let estadoPrestamo = 'Pendiente';
+        let tabla_amortizacion = [];
+        let fecha_prestamo = null;
+
+        // 4. Si el cliente es bueno, regular o excelente, aceptar y crear tabla
+        if (estadoCliente && ['Excelente', 'Bueno', 'Regular'].includes(estadoCliente)) {
+            estadoPrestamo = 'Aceptado';
+            fecha_prestamo = req.body.fecha_prestamo || new Date().toLocaleDateString('en-CA');
+            tabla_amortizacion = await generarTablaAmor(
+                req.body.saldo,
+                req.body.periodo,
+                fecha_prestamo,
+                req.body.dia_pago
+            );
+        }
+
+        // 5. Calcular totales antes de guardar el préstamo
+        let totalPagado = 0, totalCuota = 0, totalMultas = 0, totalPendiente = 0;
+        if (tabla_amortizacion && tabla_amortizacion.length > 0) {
+            const totales = calcularTotales(tabla_amortizacion);
+            totalPagado = totales.totalPagado;
+            totalCuota = totales.totalCuota;
+            totalMultas = totales.totalMultas;
+            totalPendiente = totales.totalPendiente;
+        }
+
+        // 6. Crear el préstamo con los totales
+        const prestamo = new Prestamo({
+            saldo: req.body.saldo,
+            estado: estadoPrestamo,
+            tipo_pago: req.body.tipo_pago,
+            periodo: req.body.periodo,
+            dia_pago: req.body.dia_pago,
+            id_asesor: req.body.id_asesor,
+            id_cliente: req.body.id_cliente,
+            tabla_amortizacion: tabla_amortizacion,
+            fecha_prestamo: fecha_prestamo,
+            totalPagado,
+            totalCuota,
+            totalMultas,
+            totalPendiente
+        });
+        const prestamoSaved = await prestamo.save({ session });
+
+        // 6. Si el préstamo fue aceptado, actualizar historial y wallet
+        if (estadoPrestamo === 'Aceptado') {
+            // Actualizar historial
+            await Historial.updateOne(
+                { id_usuario: prestamo.id_cliente },
+                {
+                    $inc: {
+                        prestamos_totales: 1,
+                        prestamos_activos: 1,
+                        monto_total_prestado: prestamo.saldo
+                    },
+                    $push: {
+                        prestamos_detallados: {
+                            id_prestamo: prestamo._id,
+                            saldo_pendiente: prestamo.saldo,
+                            estado: prestamo.estado,
+                            fecha_inicio: fecha_prestamo
+                        }
+                    }
+                },
+                { session }
+            );
+
+            // Registrar egreso en la wallet
+            const cliente = await Usuario.findById(req.body.id_cliente).session(session);
+            const asesor = await Usuario.findById(req.body.id_asesor).session(session);
+            await Wallet.findOneAndUpdate(
+                { owner: superUserId },
+                {
+                    $inc: { saldo: -prestamo.saldo },
+                    $push: {
+                        movimientos: {
+                            tipo: 'egreso',
+                            monto: prestamo.saldo,
+                            descripcion: `Préstamo otorgado a cliente ${cliente.nombre}`,
+                            id_prestamo: prestamo._id,
+                            id_cliente: prestamo.id_cliente,
+                            id_asesor: prestamo.id_asesor
+                        }
+                    }
+                },
+                { session }
+            );
+
+            //Crear notificacion para el super usuario sobre el prestamo
+            const mensaje = generarMensajeNotificacion({
+                type: 'prestamo',
+                data: { monto: prestamo.saldo, periodo: prestamo.periodo },
+                from: asesor, // objeto usuario asesor
+                to: cliente   // objeto usuario cliente
+            });
+
+            await Notificacion.create({
+                type: 'prestamo',
+                userId: process.env.SUPERUSER_ID,
+                from: asesor._id,
+                mensaje,
+                data: { id_prestamo: prestamo._id, monto: prestamo.saldo, periodo: prestamo.periodo }
+            });
+        }
+
+        await session.commitTransaction();
+        session.endSession();
+
+        // 7. Responder con el préstamo y el estado del cliente
+        res.json({
+            prestamo: prestamoSaved,
+            estadoCliente: estadoCliente || 'Sin historial',
+            aceptado: estadoPrestamo === 'Aceptado'
+        });
+    } catch (error) {
+        res.status(500).send(error);
     }
 }
 
@@ -102,6 +242,7 @@ export const pagarMulta = async (req, res) => {
             {
                 $set: {
                     "tabla_amortizacion.$.multa.saldado": true,
+                    "tabla_amortizacion.$.estado_pago": 'Pagado',
                     //"tabla_amortizacion.$.multa.monto_pendiente": 0, //Por ahora no se usa debido al front para mostrar el historial de las multas
                     "tabla_amortizacion.$.multa.fecha_pago": new Date()
                 }
@@ -198,50 +339,137 @@ export const deletePrestamo = async (req, res) => {
 }
 
 export const crearTabalAmortizacion = async (req, res) => {
-    if (req.body.dia_pago) console.log('Es un prestamo mensual')
+    console.log(req.body)
+    const session = await mongoose.startSession();
+    session.startTransaction();
     try {
-        const prestamo = await Prestamo.findById(req.params);//Data del prestamo 
-        if(prestamo.tabla_amortizacion.length == 0){ //Si no hay una tabla de amortización aún
-            const tabla = await generarTablaAmor(prestamo.saldo, prestamo.periodo, req.body.fecha_prestamo, req.body.dia_pago)
-            console.log(prestamo);
-            // console.log(tabla);
+        const superUserId = process.env.SUPERUSER_ID;
+        const wallet = await Wallet.findOne({ owner: superUserId }).session(session);
+        if (!wallet || !wallet.activa) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(403).json({ message: 'La wallet está apagada. No se pueden aceptar préstamos.' });
+        }
 
-            const updateTablePrest = await Prestamo.findByIdAndUpdate(
-                req.params,
-                { 
-                    tabla_amortizacion: tabla, 
-                    estado : 'Aceptado',
-                    //fecha_prestamo: new Date(req.body.fecha_prestamo + 'T00:00:00-06:00')
-                    fecha_prestamo: new Date(req.body.fecha_prestamo)
+        // Buscar el préstamo para saber el monto
+        const prestamo = await Prestamo.findById(req.params).session(session);
+        if (!prestamo) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(404).json({ message: 'Préstamo no encontrado.' });
+        }
+        if (wallet.saldo < prestamo.saldo) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(403).json({ message: 'Fondos insuficientes en la wallet para aceptar el préstamo.' });
+        }
+
+        if (prestamo.tabla_amortizacion.length > 0) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.send({ message: 'Ya existe una tabla de amortización' });
+        }
+
+        // Generar tabla de amortización
+        const tabla = await generarTablaAmor(prestamo.saldo, prestamo.periodo, req.body.fecha_prestamo, req.body.dia_pago);
+        let totalPagado = 0, totalCuota = 0, totalMultas = 0, totalPendiente = 0;
+        if (tabla && tabla.length > 0) {
+            const totales = calcularTotales(tabla);
+            totalPagado = totales.totalPagado;
+            totalCuota = totales.totalCuota;
+            totalMultas = totales.totalMultas;
+            totalPendiente = totales.totalPendiente;
+        }
+
+        // Actualizar el préstamo
+        const updateTablePrest = await Prestamo.findByIdAndUpdate(
+            req.params,
+            {
+                tabla_amortizacion: tabla,
+                estado: 'Aceptado',
+                fecha_prestamo: new Date(req.body.fecha_prestamo),
+                totalPagado,
+                totalCuota,
+                totalMultas,
+                totalPendiente
+            },
+            { new: true, session }
+        );
+
+        // Actualizar historial
+        await Historial.updateOne(
+            { id_usuario: prestamo.id_cliente },
+            {
+                $inc: {
+                    prestamos_totales: 1,
+                    prestamos_activos: 1,
+                    monto_total_prestado: prestamo.saldo
                 },
-                { new: true }
-            );
-
-            // UPDATE HISTORIAL DE PRESTAMOS ADD PRESTAMOS DETALLADOS
-            await Historial.updateOne(
-                { id_usuario: prestamo.id_cliente },
-                {   
-                    $inc: { 
-                        prestamos_totales: 1, // Incrementar el total de préstamos
-                        prestamos_activos: 1, // Incrementar el total de préstamos activos
-                        monto_total_prestado: prestamo.saldo // Incrementar el monto total prestado
-                    },
-                    $push: {
-                        prestamos_detallados: {
-                            id_prestamo: prestamo._id,
-                            saldo_pendiente: prestamo.saldo,
-                            estado: updateTablePrest.estado,
-                            fecha_inicio: new Date().toLocaleDateString('en-CA')
-                        }
+                $push: {
+                    prestamos_detallados: {
+                        id_prestamo: prestamo._id,
+                        saldo_pendiente: prestamo.saldo,
+                        estado: updateTablePrest.estado,
+                        fecha_inicio: new Date().toLocaleDateString('en-CA')
                     }
                 }
-            );
+            },
+            { session }
+        );
 
-            res.json(updateTablePrest)
-        } else{
-        res.send({message:'Ya existe una tabla de amortización'})
+        console.log(prestamo)
+        // Registrar egreso en la wallet
+        const cliente = await Usuario.findById(prestamo.id_cliente).session(session);
+        const asesor = await Usuario.findById(prestamo.id_asesor).session(session);
+        console.log(cliente, asesor)
+
+        if (!cliente || !asesor) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(404).json({ message: 'Cliente o asesor no encontrado.' });
         }
+
+        await Wallet.findOneAndUpdate(
+            { owner: superUserId },
+            {
+                $inc: { saldo: -prestamo.saldo },
+                $push: {
+                    movimientos: {
+                        tipo: 'egreso',
+                        monto: prestamo.saldo,
+                        descripcion: `Préstamo otorgado a cliente ${cliente.nombre}`,
+                        id_prestamo: prestamo._id,
+                        id_cliente: prestamo.id_cliente,
+                        id_asesor: prestamo.id_asesor
+                    }
+                }
+            },
+            { session }
+        );
+
+        // Crear notificación para el asesor sobre el préstamo aprobado
+        const mensaje = generarMensajeNotificacion({
+            type: 'autorizacion',
+            data: { monto: prestamo.saldo },
+            from: superUserId,
+            to: cliente
+        });
+
+        await Notificacion.create([{
+            type: 'prestamo',
+            userId: asesor._id,
+            from: superUserId,
+            mensaje,
+            data: { id_prestamo: prestamo._id }
+        }], { session });
+
+        await session.commitTransaction();
+        session.endSession();
+
+        res.json(updateTablePrest);
     } catch (error) {
+        await session.abortTransaction();
+        session.endSession();
         res.status(500).send(error);
     }
 }
@@ -312,6 +540,7 @@ const generarTablaAmor = async (monto, periodo, fecha, dia_semana) =>{
             num_pago: i,
             fecha_pago: fechas[i - 1],
             cuota: intereses_a_pagar,
+            estado_pago: 'No pagado'
         });
     }
     
