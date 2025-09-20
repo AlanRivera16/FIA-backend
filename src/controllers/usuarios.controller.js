@@ -31,7 +31,7 @@ export const getAsesores = async (req, res) => {
         const usuario = await Usuario.find({ 
             deleteStatus:false,
             role: "ASESOR"
-        });
+        }).populate('id_historial');
         res.send(usuario);
     } catch (error) {
         res.status(500).send(error);
@@ -149,6 +149,24 @@ export const postUsuario = async (req, res) => {
                 })
             );
             usuario.aval_info.evidencia_aval = imageAvalResults;
+        }
+
+        // 4. Manejo de imágenes de aval_info
+        let imageGarantiasResults = [];
+        if (req.files?.image_garantia) {
+            const files = Array.isArray(req.files.image_garantia) ? req.files.image_garantia : [req.files.image_garantia];
+            imageGarantiasResults = await Promise.all(
+                files.map(async (file) => {
+                    const result = await uploadImage(file.tempFilePath);
+                    await fs.unlink(file.tempFilePath)
+                    return {
+                        url: result.secure_url,
+                        public_id: result.public_id,
+                        originalname: file.name
+                    };
+                })
+            );
+            usuario.garantias = imageGarantiasResults;
         }
 
         // 5. Guarda el usuario en la base de datos
@@ -392,3 +410,60 @@ export const asignarAsesorAClientes = async (req, res) => {
     res.status(500).json({ message: 'Error al asignar asesor', error: error.message });
   }
 };
+
+
+//IMAGES
+
+export const uploadGarantiasImages = async (req, res) => {
+    try {
+        const usuario = await Usuario.findById(req.params._id);
+        if (!usuario) return res.status(404).json({ message: "Usuario no encontrado" });
+
+        let imageGarantiasResults = [];
+        if (req.files?.image_garantia) {
+            const files = Array.isArray(req.files.image_garantia) ? req.files.image_garantia : [req.files.image_garantia];
+            imageGarantiasResults = await Promise.all(
+                files.map(async (file) => {
+                    const result = await uploadImage(file.tempFilePath);
+                    await fs.unlink(file.tempFilePath);
+                    return {
+                        url: result.secure_url,
+                        public_id: result.public_id,
+                        originalname: file.name
+                    };
+                })
+            );
+            usuario.garantias = [...(usuario.garantias || []), ...imageGarantiasResults];
+            await usuario.save();
+        }
+        res.json({ message: "Imágenes de garantías subidas correctamente", garantias: usuario.garantias });
+    } catch (error) {
+        res.status(500).json({ message: "Error al subir imágenes de garantías", error: error.message });
+    }
+};
+
+export const deleteGarantiasImages = async (req, res) => {
+    try {
+        const usuario = await Usuario.findById(req.params._id);
+        if (!usuario) return res.status(404).json({ message: "Usuario no encontrado" });
+
+        console.log(req.body)
+
+        const { public_ids } = req.body; // array de public_id a borrar
+        if (!Array.isArray(public_ids) || public_ids.length === 0) {
+            return res.status(400).json({ message: "Debes enviar un array de public_ids" });
+        }
+
+        // Elimina de Cloudinary y del array garantias
+        for (const public_id of public_ids) {
+            await removeImage(public_id);
+        }
+        usuario.garantias = (usuario.garantias || []).filter(img => !public_ids.includes(img.public_id));
+        await usuario.save();
+
+        res.json({ message: "Imágenes de eliminadas correctamente", garantias: usuario.garantias });
+    } catch (error) {
+        res.status(500).json({ message: "Error al eliminar imágenes de garantías", error: error.message });
+    }
+};
+// ...existing code...

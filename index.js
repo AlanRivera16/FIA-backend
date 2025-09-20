@@ -39,7 +39,7 @@ cron.schedule('18 16 * * *', async () =>{
 
     // Buscar préstamos activos que tienen pagos vencidos
     const prestamosVencidos = await Prestamo.find({
-      estado: { $ne: 'Cerrado' }, // Evitar préstamos ya cerrados
+      estado: 'Aceptado', // Evitar préstamos ya cerrados
       $or: [
         { 'tabla_amortizacion.fecha_pago': { $lt: hoy } }, // Fechas pasadas
         {

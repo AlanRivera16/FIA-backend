@@ -5,6 +5,9 @@ import Usuario from "../models/usuario.model.js"
 import { generarMensajeNotificacion } from '../utils/notificaciones.utils.js';
 import Notificacion from '../models/notificaciones.model.js';
 import mongoose from "mongoose";
+import { uploadImage, removeImage } from '../utils/cloudinary.js';
+import fs from 'fs/promises';
+import { registrarMovimiento } from './wallet.controller.js';
 
 export const getPrestamos = async (req, res) => {
     try {
@@ -150,7 +153,7 @@ export const postPrestamo = async (req, res) => {
         if (estadoPrestamo === 'Aceptado') {
             // Actualizar historial
             await Historial.updateOne(
-                { id_usuario: prestamo.id_cliente },
+                { id_usuario: prestamo.id_cliente }, //CLIENTE HISTORIAL
                 {
                     $inc: {
                         prestamos_totales: 1,
@@ -163,6 +166,24 @@ export const postPrestamo = async (req, res) => {
                             saldo_pendiente: prestamo.saldo,
                             estado: prestamo.estado,
                             fecha_inicio: fecha_prestamo
+                        }
+                    }
+                },
+                { session }
+            );
+
+            // Actualizar historial del asesor
+            await Historial.updateOne(
+                { id_usuario: prestamo.id_asesor }, //ASESOR HISTORIAL
+                {
+                    $inc: {
+                        prestamos_totales: 1,
+                        prestamos_activos: 1,
+                        monto_total_prestado: prestamo.saldo
+                    },
+                    $push: {
+                        prestamos_detallados: {
+                            id_prestamo: prestamo._id,
                         }
                     }
                 },
@@ -312,16 +333,32 @@ export const rechazarPrestamo = async (req, res) => {
     }
 }
 
-export const cerrarPago = async (req, res) => {
+export const cerrarPrestamo = async (req, res) => {
     try {
+        // 1. Cambia el estado del préstamo a 'Cerrado'
         const cerrarPrestamo = await Prestamo.findByIdAndUpdate(
             req.params, 
-            {
-                estado : 'Cerrado'
-            },
+            { estado : 'Cerrado' },
             { new: true }
         );
-        res.json(cerrarPrestamo)
+
+        if (!cerrarPrestamo) {
+            return res.status(404).json({ message: "Préstamo no encontrado" });
+        }
+
+        // 2. Actualiza el historial del cliente
+        await Historial.updateOne(
+            { id_usuario: cerrarPrestamo.id_cliente },
+            { $inc: { prestamos_activos: -1, prestamos_finalizados: 1 } }
+        );
+
+        // 3. Actualiza el historial del asesor
+        await Historial.updateOne(
+            { id_usuario: cerrarPrestamo.id_asesor },
+            { $inc: { prestamos_activos: -1, prestamos_finalizados: 1 } }
+        );
+
+        res.json(cerrarPrestamo);
     } catch (error) {
         res.status(500).send(error)
     }
@@ -338,7 +375,7 @@ export const deletePrestamo = async (req, res) => {
     }
 }
 
-export const crearTabalAmortizacion = async (req, res) => {
+export const crearTablaAmortizacion = async (req, res) => {
     console.log(req.body)
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -411,6 +448,23 @@ export const crearTabalAmortizacion = async (req, res) => {
                         saldo_pendiente: prestamo.saldo,
                         estado: updateTablePrest.estado,
                         fecha_inicio: new Date().toLocaleDateString('en-CA')
+                    }
+                }
+            },
+            { session }
+        );
+        // Actualizar historial
+        await Historial.updateOne(
+            { id_usuario: prestamo.id_asesor }, //ASESOR HISTORIAL
+            {
+                $inc: {
+                    prestamos_totales: 1,
+                    prestamos_activos: 1,
+                    monto_total_prestado: prestamo.saldo
+                },
+                $push: {
+                    prestamos_detallados: {
+                        id_prestamo: prestamo._id,
                     }
                 }
             },
@@ -607,3 +661,134 @@ const calcularFechas = (fechaInicial, periodo, dia_pago) => { // dia_pago Lunes 
 
     return fechas;
 }
+
+//IMAGES COMPROBANTES DE PAGO
+
+export const uploadComprobantesPagoImages = async (req, res) => {
+    try {
+        const { _id } = req.params; // ID del préstamo
+        const { num_pago } = req.body; // Número de pago
+
+        if (!num_pago) {
+            return res.status(400).json({ message: "Debes seleccionar el pago a editar" });
+        }
+
+        const prestamo = await Prestamo.findById(_id);
+        if (!prestamo) {
+            return res.status(404).json({ message: "Préstamo no encontrado" });
+        }
+
+        // Buscar el pago específico en la tabla de amortización
+        const pagoIndex = prestamo.tabla_amortizacion.findIndex(p => p.num_pago === Number(num_pago));
+        if (pagoIndex === -1) {
+            return res.status(404).json({ message: "Pago no encontrado en la tabla de amortización" });
+        }
+
+        let imageComprobantesResults = [];
+        if (req.files?.image_comprobante) {
+            const files = Array.isArray(req.files.image_comprobante) ? req.files.image_comprobante : [req.files.image_comprobante];
+            imageComprobantesResults = await Promise.all(
+                files.map(async (file) => {
+                    const result = await uploadImage(file.tempFilePath);
+                    await fs.unlink(file.tempFilePath);
+                    return {
+                        url: result.secure_url,
+                        public_id: result.public_id,
+                        originalname: file.name
+                    };
+                })
+            );
+            // Actualiza el array comprobantes del pago específico
+            if (!prestamo.tabla_amortizacion[pagoIndex].comprobantes) {
+                prestamo.tabla_amortizacion[pagoIndex].comprobantes = [];
+            }
+            prestamo.tabla_amortizacion[pagoIndex].comprobantes.push(...imageComprobantesResults);
+            await prestamo.save();
+        }
+
+        res.json({
+            message: `Imágenes subidas correctamente al pago ${num_pago}`,
+            comprobantes: prestamo.tabla_amortizacion[pagoIndex].comprobantes
+        });
+    } catch (error) {
+        res.status(500).json({ message: "Error al subir imágenes", error: error.message });
+    }
+};
+
+export const deleteComprobantesPagoImages = async (req, res) => {
+    try {
+        const { _id } = req.params; // ID del préstamo
+        const { num_pago, public_ids } = req.body; // Número de pago y array de public_id a borrar
+
+        if (!num_pago) {
+            return res.status(400).json({ message: "Debes seleccionar el pago a editar" });
+        }
+        if (!Array.isArray(public_ids) || public_ids.length === 0) {
+            return res.status(400).json({ message: "Debes enviar un array de public_ids" });
+        }
+
+        const prestamo = await Prestamo.findById(_id);
+        if (!prestamo) {
+            return res.status(404).json({ message: "Préstamo no encontrado" });
+        }
+
+        // Buscar el pago específico en la tabla de amortización
+        const pagoIndex = prestamo.tabla_amortizacion.findIndex(p => p.num_pago === Number(num_pago));
+        if (pagoIndex === -1) {
+            return res.status(404).json({ message: "Pago no encontrado en la tabla de amortización" });
+        }
+
+        // Elimina de Cloudinary y del array comprobantes
+        for (const public_id of public_ids) {
+            await removeImage(public_id);
+        }
+        prestamo.tabla_amortizacion[pagoIndex].comprobantes = 
+            (prestamo.tabla_amortizacion[pagoIndex].comprobantes || []).filter(img => !public_ids.includes(img.public_id));
+        await prestamo.save();
+
+        res.json({ 
+            message: "Imágenes de comprobantes eliminadas correctamente", 
+            comprobantes: prestamo.tabla_amortizacion[pagoIndex].comprobantes 
+        });
+    } catch (error) {
+        res.status(500).json({ message: "Error al eliminar imágenes de comprobantes", error: error.message });
+    }
+};
+
+export const aceptarPagoPrestamo = async (req, res) => {
+    try {
+        const { id_prestamo, num_pago } = req.params;
+
+        const prestamo = await Prestamo.findById(id_prestamo);
+        if (!prestamo) {
+            return res.status(404).json({ message: "Préstamo no encontrado" });
+        }
+
+        const pagoIndex = prestamo.tabla_amortizacion.findIndex(p => p.num_pago === Number(num_pago));
+        if (pagoIndex === -1) {
+            return res.status(404).json({ message: "Pago no encontrado en la tabla de amortización" });
+        }
+
+        prestamo.tabla_amortizacion[pagoIndex].aceptado = true;
+        await prestamo.save();
+
+        // Reutiliza la función registrarMovimiento
+        req.body = {
+            owner: process.env.SUPERUSER_ID,
+            tipo: 'ingreso',
+            monto: prestamo.tabla_amortizacion[pagoIndex].cuota,
+            descripcion: `Pago aceptado del préstamo ${prestamo._id}, pago #${num_pago}`,
+            id_prestamo: prestamo._id,
+            id_cliente: prestamo.id_cliente,
+            id_asesor: prestamo.id_asesor
+        };
+        await registrarMovimiento(req, { json: () => {} });
+
+        res.json({
+            message: `Pago #${num_pago} aceptado y movimiento registrado en wallet`,
+            pago: prestamo.tabla_amortizacion[pagoIndex]
+        });
+    } catch (error) {
+        res.status(500).json({ message: "Error al aceptar el pago", error: error.message });
+    }
+};

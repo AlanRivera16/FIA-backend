@@ -91,9 +91,13 @@ const UserSchema = mongoose.Schema({
             type: String,
             require: false
         },
-        evidencia_aval: Array
+        evidencia_aval: Array,
     },
-    evidencia_aval: Array
+    evidencia_aval: Array,
+    garantias: {
+        type: Array,
+        require: false
+    }
     //evidencia: evidenciaAval,
 }, { timestamps:true});
 

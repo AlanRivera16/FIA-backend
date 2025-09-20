@@ -40,6 +40,12 @@ var subDoc = mongoose.Schema({
         fecha_pago: { type: Date, default: null },
         // required: false
     },
+    aceptado: {
+        type: Boolean,
+        default: false,
+        required: false
+    },
+    comprobantes: Array,
     notas: {
         type: String,
         required: false
@@ -57,6 +63,7 @@ const PrestamoSchema = mongoose.Schema({
     },
     estado: {
         type: String,
+        enum: ['Aceptado', 'Rechazado', 'Pendiente', 'Cerrado'],
         default: 'Pendiente' // 'Aceptado' | 'Rechazado' | 'Cerrado'
     },
     tipo_pago:{
