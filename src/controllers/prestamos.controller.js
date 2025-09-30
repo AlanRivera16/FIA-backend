@@ -59,7 +59,8 @@ export const getPrestamoById = async (req, res) => {
         // const id = mongoose.Types.ObjectId(req.params._id);
 
         const result = await Prestamo.findById(req.params)
-        .populate('id_asesor'); // Esto trae el objeto asesor completo
+        .populate('id_asesor') // Esto trae el objeto asesor completo
+        .populate('id_cliente');
         res.send(result); // Devuelve solo el objeto, no un array
     } catch (error) {
         res.status(500).send(error);
@@ -231,9 +232,14 @@ export const postPrestamo = async (req, res) => {
         await session.commitTransaction();
         session.endSession();
 
+        // Consulta el préstamo guardado y haz populate
+        const prestamoFormateado = await Prestamo.findById(prestamoSaved._id)
+            .populate('id_asesor')
+            .populate('id_cliente');
+
         // 7. Responder con el préstamo y el estado del cliente
         res.json({
-            prestamo: prestamoSaved,
+            prestamo: prestamoFormateado,
             estadoCliente: estadoCliente || 'Sin historial',
             aceptado: estadoPrestamo === 'Aceptado'
         });
@@ -326,7 +332,8 @@ export const rechazarPrestamo = async (req, res) => {
                 estado : 'Rechazado'
             },
             { new: true }
-        );
+        ).populate('id_asesor')   // Trae la info del asesor
+         .populate('id_cliente'); // Trae la info del cliente;
         res.json(rejectedPrestamo)
     } catch (error) {
         res.status(500).send(error)
@@ -431,7 +438,8 @@ export const crearTablaAmortizacion = async (req, res) => {
                 totalPendiente
             },
             { new: true, session }
-        );
+        ).populate('id_asesor')   // Trae la info del asesor
+         .populate('id_cliente'); // Trae la info del cliente
 
         // Actualizar historial
         await Historial.updateOne(

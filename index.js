@@ -22,7 +22,7 @@ import Usuario from './src/models/usuario.model.js';
 
 dotenv.config();
         // minute / hour / day / month / day 
-cron.schedule('18 16 * * *', async () =>{
+cron.schedule('1 20 * * *', async () =>{
   console.log('⏳ Ejecutando tarea automática para verificar pagos vencidos...')
 
   try {
@@ -31,11 +31,11 @@ cron.schedule('18 16 * * *', async () =>{
     hoy.setHours(0, 0, 0, 0); // Establecer hoy a las 00:00
 
     const horaCorte = new Date(hoy);
-    horaCorte.setHours(19, 1, 0, 0); // 20:01 de hoy
+    horaCorte.setHours(20, 1, 0, 0); // 20:01 de hoy
 
     console.log(`🕒 Ahora: ${ahora}`);
     console.log(`📆 Hoy (00:00): ${hoy}`);
-    console.log(`⏳ Hora Corte (19:01): ${horaCorte}`);
+    console.log(`⏳ Hora Corte (20:01): ${horaCorte}`);
 
     // Buscar préstamos activos que tienen pagos vencidos
     const prestamosVencidos = await Prestamo.find({

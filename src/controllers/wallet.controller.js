@@ -275,3 +275,41 @@ export const eliminarMovimientoGuardado = async (req, res) => {
     res.status(500).json({ message: 'Error al eliminar movimiento guardado', error: error.message });
   }
 };
+
+//CONFIGURACION
+export const getWalletConfig = async (req, res) => {
+  try {
+    const { owner } = req.params;
+    const wallet = await Wallet.findOne({ owner })
+    res.json(wallet.configuracion);
+  } catch (error) {
+    res.status(500).json({ message: 'Error al obtener la configuracion de la wallet', error: error.message });
+  }
+};
+export const editarConfiguracionWallet = async (req, res) => {
+  try {
+    const { owner } = req.params;
+    const { hora_corte, monto_max_prestamos } = req.body;
+
+    // Construye el objeto de actualización solo con los campos recibidos
+    const updateFields = {};
+    if (hora_corte !== undefined) updateFields['configuracion.hora_corte'] = hora_corte;
+    if (monto_max_prestamos !== undefined) updateFields['configuracion.monto_max_prestamos'] = monto_max_prestamos;
+
+    if (Object.keys(updateFields).length === 0) {
+      return res.status(400).json({ message: 'No se recibieron campos para actualizar.' });
+    }
+
+    const wallet = await Wallet.findOneAndUpdate(
+      { owner },
+      { $set: updateFields },
+      { new: true }
+    );
+
+    if (!wallet) return res.status(404).json({ message: 'Wallet no encontrada' });
+
+    res.json({ configuracion: wallet.configuracion });
+  } catch (error) {
+    res.status(500).json({ message: 'Error al editar configuración', error: error.message });
+  }
+};

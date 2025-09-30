@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { asignarAsesorAClientes, deleteGarantiasImages, deleteUsuario, getAsesores, getClientes, getClientesBaja, getClientesByIdAssigned, getClientesNoAssigned, getUsuarios, postUsuario, putUsuario, uploadGarantiasImages, uploadIMAGEN } from "../controllers/usuarios.controller.js"
+import { asignarAsesorAClientes, deleteGarantiasImages, deleteUsuario, getAsesores, getClientes, getClientesBaja, getClientesByIdAssigned, getClientesNoAssigned, getSaldoUsuario, getUsuarios, postUsuario, putUsuario, uploadGarantiasImages, uploadIMAGEN } from "../controllers/usuarios.controller.js"
 import { loginUser } from "../controllers/authControllers.js";
 const router = Router()
 
@@ -9,6 +9,7 @@ router.get('/usuarios/clientes/:_id', getClientesByIdAssigned);
 router.get('/usuarios/asesores', getAsesores);
 router.get('/usuarios/no-asignados', getClientesNoAssigned);
 router.get('/usuarios/baja', getClientesBaja);
+router.get('/usuarios/:id/saldo', getSaldoUsuario);
 
 router.post('/usuarios', postUsuario);
 router.post('/usuarios/img', uploadIMAGEN);

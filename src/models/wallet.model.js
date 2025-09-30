@@ -12,12 +12,24 @@ const MovimientoSchema = mongoose.Schema({
   interes: { type: Number, default: 0 }
 });
 
+const Configuraciones = mongoose.Schema({
+    hora_corte: {
+      type: String,
+      default: '2025-09-26T20:01:00'
+    },
+    monto_max_prestamos: {
+      type: Number,
+      default: 24000
+    },
+});
+
 const WalletSchema = mongoose.Schema({
   owner: { type: mongoose.Schema.Types.ObjectId, ref: 'usuarios', required: true }, // Super usuario
   saldo: { type: Number, default: 0 },
   activa: { type: Boolean, default: true },
   movimientos: [MovimientoSchema],
-  guardados: []
+  guardados: [],
+  configuracion: Configuraciones
 }, { timestamps: true });
 
 export default mongoose.model("wallet", WalletSchema);

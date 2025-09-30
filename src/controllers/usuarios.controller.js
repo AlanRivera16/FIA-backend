@@ -5,6 +5,7 @@ import {removeImage, uploadImage} from "../utils/cloudinary.js"
 import fs from 'fs-extra'
 import { generarMensajeNotificacion } from '../utils/notificaciones.utils.js';
 import Notificacion from '../models/notificaciones.model.js';
+import Prestamo from "../models/prestamo.model.js"
 
 
 export const getUsuarios = async (req, res) => {
@@ -17,22 +18,50 @@ export const getUsuarios = async (req, res) => {
 }
 export const getClientes = async (req, res) => {
     try {
-        const usuario = await Usuario.find({ 
+        const clientes = await Usuario.find({ 
             deleteStatus:false,
             role: "CLIENTE"
         });
-        res.send(usuario);
+
+        const clientesConSaldo = await Promise.all(clientes.map(async (cliente) => {
+            const prestamos = await Prestamo.find({
+                id_cliente: cliente._id,
+                estado: 'Aceptado',
+                deleteStatus: false
+            });
+            const saldoTotal = prestamos.reduce((total, p) => total + (p.saldo || 0), 0);
+            return {
+                ...cliente.toObject(),
+                saldoTotal
+            };
+        }));
+        res.send(clientesConSaldo);
     } catch (error) {
         res.status(500).send(error);
     }
 }
 export const getAsesores = async (req, res) => {
     try {
-        const usuario = await Usuario.find({ 
+        const asesores = await Usuario.find({ 
             deleteStatus:false,
             role: "ASESOR"
         }).populate('id_historial');
-        res.send(usuario);
+
+        // Obtén los saldos de todos los asesores en paralelo
+        const asesoresConSaldo = await Promise.all(asesores.map(async (asesor) => {
+            const prestamos = await Prestamo.find({
+                id_asesor: asesor._id,
+                estado: 'Aceptado',
+                deleteStatus: false
+            });
+            const saldoTotal = prestamos.reduce((total, p) => total + (p.saldo || 0), 0);
+            return {
+                ...asesor.toObject(),
+                saldoTotal
+            };
+        }));
+
+        res.send(asesoresConSaldo);
     } catch (error) {
         res.status(500).send(error);
     }
@@ -43,7 +72,21 @@ export const getClientesByIdAssigned = async (req, res) => {
             deleteStatus:false,
             assigned_to: req.params
         });
-        res.send(clientes);
+
+        const clientesConSaldo = await Promise.all(clientes.map(async (cliente) => {
+            const prestamos = await Prestamo.find({
+                id_cliente: cliente._id,
+                estado: 'Aceptado',
+                deleteStatus: false
+            });
+            const saldoTotal = prestamos.reduce((total, p) => total + (p.saldo || 0), 0);
+            return {
+                ...cliente.toObject(),
+                saldoTotal
+            };
+        }));
+
+        res.send(clientesConSaldo);
     } catch (error) {
         res.status(500).send(error);
     }
@@ -75,6 +118,22 @@ export const getClientesBaja = async (req, res) => {
         res.status(500).send(error);
     }
 }
+
+export const getSaldoUsuario = async (req, res) => {
+  try {
+    const usuarioId = req.params.id;
+    // Suma el saldo de todos los préstamos activos y aceptados asignados al asesor
+    const prestamos = await Prestamo.find({
+      id_asesor: usuarioId,
+      estado: 'Aceptado',
+      deleteStatus: false
+    });
+    const saldoTotal = prestamos.reduce((total, p) => total + (p.saldo || 0), 0);
+    res.json({ usuarioId, saldoTotal });
+  } catch (error) {
+    res.status(500).json({ message: "Error al calcular saldo del usuario", error: error.message });
+  }
+};
 
 export const postUsuario = async (req, res) => {
     const session = await mongoose.startSession();

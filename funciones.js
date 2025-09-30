@@ -120,7 +120,7 @@ export const calcular15Semana = async (prestamo) => {
 
   // Si tiene 3 pagos con multa y aún no existe el pago #15, agrégalo
   if (pagosConMulta.length >= 3 && !prestamo.tabla_amortizacion.find(p => p.num_pago === 15)) {
-    const ultimoPago = prestamo.tabla_amortizacion.sort((a, b) => b.num_pago - a.num_pago)[0];
+    const ultimoPago = [...prestamo.tabla_amortizacion].sort((a, b) => b.num_pago - a.num_pago)[0];
     const nuevaFechaPago = new Date(ultimoPago.fecha_pago);
     nuevaFechaPago.setDate(nuevaFechaPago.getDate() + 7);
 
@@ -184,7 +184,7 @@ export const calcular15Semana = async (prestamo) => {
     pago => pago.multa.monto_pendiente > pago.cuota
   );
   if (pagoMultaMayor && !prestamo.tabla_amortizacion.find(p => p.num_pago === 16)) {
-    const ultimoPago = prestamo.tabla_amortizacion.sort((a, b) => b.num_pago - a.num_pago)[0];
+    const ultimoPago = [...prestamo.tabla_amortizacion].sort((a, b) => b.num_pago - a.num_pago)[0];
     const nuevaFechaPago = new Date(ultimoPago.fecha_pago);
     nuevaFechaPago.setDate(nuevaFechaPago.getDate() + 7);
 
