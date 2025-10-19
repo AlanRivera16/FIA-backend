@@ -81,6 +81,56 @@ export const getPrestamosByAsesor = async (req, res) => {
     }
 }
 
+export const getPrestamosByFechas = async (req, res) => {
+    //console.log(req.params)
+    let prestamos
+    try {
+        if(req.params._id == process.env.SUPERUSER_ID){
+            prestamos = await Prestamo.find({ 
+                deleteStatus:false,
+            })
+            .populate('id_cliente'); // Trae la info del cliente
+        }else {
+            prestamos = await Prestamo.find({ 
+                deleteStatus:false,
+                id_asesor: req.params,
+                //estado: 'Aceptado'
+            })
+            .populate('id_cliente'); // Trae la info del cliente
+        }
+
+        //console.log(prestamos)
+
+        //Recorremos cada prestamo y cada pago de la tabla de amortizacion
+        const fechasPagos = {};
+        prestamos.forEach(prestamo => {
+            prestamo.tabla_amortizacion.forEach(pago => {
+                const fechaStr = pago.fecha_pago.toISOString().slice(0, 10);
+                if (!fechasPagos[fechaStr]) fechasPagos[fechaStr] = [];
+                fechasPagos[fechaStr].push({
+                    cliente_id: prestamo.id_cliente._id,
+                    cliente_nombre: prestamo.id_cliente.nombre,
+                    imagenes: prestamo.id_cliente.evidencia_aval,
+                    prestamo_id: prestamo._id,
+                    num_pago: pago.num_pago,
+                    monto: pago.cuota,
+                    estado_pago: pago.estado_pago
+                });
+            });
+        });
+
+        //console.log(fechasPagos)
+
+        const resultado = Object.entries(fechasPagos)
+            .map(([fecha, pagos]) => ({ fecha, pagos }))
+            .sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+
+        res.json(resultado);
+    } catch (error) {
+        res.status(500).send(error);
+    }
+}
+
 export const postPrestamo = async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -383,7 +433,7 @@ export const deletePrestamo = async (req, res) => {
 }
 
 export const crearTablaAmortizacion = async (req, res) => {
-    console.log(req.body)
+    //console.log(req.body)
     const session = await mongoose.startSession();
     session.startTransaction();
     try {
@@ -479,11 +529,10 @@ export const crearTablaAmortizacion = async (req, res) => {
             { session }
         );
 
-        console.log(prestamo)
+        //console.log(prestamo)
         // Registrar egreso en la wallet
         const cliente = await Usuario.findById(prestamo.id_cliente).session(session);
         const asesor = await Usuario.findById(prestamo.id_asesor).session(session);
-        console.log(cliente, asesor)
 
         if (!cliente || !asesor) {
             await session.abortTransaction();
@@ -615,7 +664,7 @@ const generarTablaAmor = async (monto, periodo, fecha, dia_semana) =>{
 }
 
 const calcularFechas = (fechaInicial, periodo, dia_pago) => { // dia_pago Lunes | Sábado
-    console.log(fechaInicial)
+    //console.log(fechaInicial)
     const fechas = [];
     const fechaBase = new Date(fechaInicial + 'T00:00:00-06:00'); ///////////////////////////////////////
 
@@ -785,7 +834,7 @@ export const aceptarPagoPrestamo = async (req, res) => {
             owner: process.env.SUPERUSER_ID,
             tipo: 'ingreso',
             monto: prestamo.tabla_amortizacion[pagoIndex].cuota,
-            descripcion: `Pago aceptado del préstamo ${prestamo._id}, pago #${num_pago}`,
+            descripcion: `Pago #${num_pago} aceptado del préstamo por $${prestamo.saldo}.00. `,
             id_prestamo: prestamo._id,
             id_cliente: prestamo.id_cliente,
             id_asesor: prestamo.id_asesor

@@ -80,9 +80,12 @@ export const getClientesByIdAssigned = async (req, res) => {
                 deleteStatus: false
             });
             const saldoTotal = prestamos.reduce((total, p) => total + (p.saldo || 0), 0);
+            const saldoPendiente = prestamos.reduce((total, p) => total + (p.totalPendiente || 0), 0);
+
             return {
                 ...cliente.toObject(),
-                saldoTotal
+                saldoTotal,
+                saldoPendiente
             };
         }));
 
@@ -382,14 +385,13 @@ export const putUsuario = async (req, res) => {
         }
       }
     }
-    console.log(usuario)
+    //console.log(usuario)
 
     // 5. Guarda los cambios
     await usuario.save();
 
     res.json({ message: "Usuario actualizado correctamente", usuario });
   } catch (error) {
-    console.error("Error en putUsuario:", error);
     res.status(500).json({ message: "Error al actualizar usuario", error: error.message });
   }
 }
@@ -439,7 +441,7 @@ export const asignarAsesorAClientes = async (req, res) => {
 
     // Obtener datos de los clientes asignados
     const clientesData = await Usuario.find({ _id: { $in: clienteIds } }, 'nombre').session(session);
-    console.log(clientesData.length)
+    //console.log(clientesData.length)
     
     // Generar mensaje de notificación
     const mensaje = generarMensajeNotificacion({
@@ -448,7 +450,6 @@ export const asignarAsesorAClientes = async (req, res) => {
         from: null,
         to: null
     });
-    console.log(mensaje)
 
     // Crear notificación para el asesor
     await Notificacion.create([{
@@ -506,7 +507,7 @@ export const deleteGarantiasImages = async (req, res) => {
         const usuario = await Usuario.findById(req.params._id);
         if (!usuario) return res.status(404).json({ message: "Usuario no encontrado" });
 
-        console.log(req.body)
+        //console.log(req.body)
 
         const { public_ids } = req.body; // array de public_id a borrar
         if (!Array.isArray(public_ids) || public_ids.length === 0) {

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getPrestamos, postPrestamo, putPrestamo, deletePrestamo, getPrestamoById, crearTablaAmortizacion, putTablaAmrPago, rechazarPrestamo, pagarMulta, getPrestamosWithAsesor, getPrestamosByAsesor, cerrarPrestamo, uploadComprobantesPagoImages, deleteComprobantesPagoImages, aceptarPagoPrestamo } from "../controllers/prestamos.controller.js"
+import { getPrestamos, postPrestamo, putPrestamo, deletePrestamo, getPrestamoById, crearTablaAmortizacion, putTablaAmrPago, rechazarPrestamo, pagarMulta, getPrestamosWithAsesor, getPrestamosByAsesor, cerrarPrestamo, uploadComprobantesPagoImages, deleteComprobantesPagoImages, aceptarPagoPrestamo, getPrestamosByFechas } from "../controllers/prestamos.controller.js"
 const router = Router()
 
 router.get('/prestamos', getPrestamos);
@@ -8,6 +8,8 @@ router.get('/prestamos_asesor', getPrestamosWithAsesor);
 
 router.get('/prestamo_by_id/:_id', getPrestamoById)
 router.get('/prestamos/asesor/:_id', getPrestamosByAsesor)
+
+router.get('/calendario/asesor/:_id', getPrestamosByFechas)
 
 router.post('/prestamo', postPrestamo);
 
