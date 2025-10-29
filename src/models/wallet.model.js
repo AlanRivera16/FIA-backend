@@ -28,6 +28,7 @@ const WalletSchema = mongoose.Schema({
   saldo: { type: Number, default: 0 },
   activa: { type: Boolean, default: true },
   movimientos: [MovimientoSchema], //Esto va a desaparecer para mejor escalabilidad
+  recentMovimientos: [{ type: mongoose.Schema.Types.ObjectId, ref: 'movimientos' }],
   guardados: [],
   configuracion: Configuraciones
 }, { timestamps: true });

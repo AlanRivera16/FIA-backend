@@ -7,7 +7,7 @@ import Notificacion from '../models/notificaciones.model.js';
 import mongoose from "mongoose";
 import { uploadImage, removeImage } from '../utils/cloudinary.js';
 import fs from 'fs/promises';
-import { registrarMovimiento } from './wallet.controller.js';
+import { registrarMovimiento, registrarMovimiento2 } from './wallet.controller.js';
 
 export const getPrestamos = async (req, res) => {
     try {
@@ -244,23 +244,34 @@ export const postPrestamo = async (req, res) => {
             // Registrar egreso en la wallet
             const cliente = await Usuario.findById(req.body.id_cliente).session(session);
             const asesor = await Usuario.findById(req.body.id_asesor).session(session);
-            await Wallet.findOneAndUpdate(
-                { owner: superUserId },
-                {
-                    $inc: { saldo: -prestamo.saldo },
-                    $push: {
-                        movimientos: {
-                            tipo: 'egreso',
-                            monto: prestamo.saldo,
-                            descripcion: `Préstamo otorgado a cliente ${cliente.nombre}`,
-                            id_prestamo: prestamo._id,
-                            id_cliente: prestamo.id_cliente,
-                            id_asesor: prestamo.id_asesor
-                        }
-                    }
-                },
-                { session }
-            );
+            // await Wallet.findOneAndUpdate(
+            //     { owner: superUserId },
+            //     {
+            //         $inc: { saldo: -prestamo.saldo },
+            //         $push: {
+            //             movimientos: {
+            //                 tipo: 'egreso',
+            //                 monto: prestamo.saldo,
+            //                 descripcion: `Préstamo otorgado a cliente ${cliente.nombre}`,
+            //                 id_prestamo: prestamo._id,
+            //                 id_cliente: prestamo.id_cliente,
+            //                 id_asesor: prestamo.id_asesor
+            //             }
+            //         }
+            //     },
+            //     { session }
+            // );
+
+            req.body = {
+                owner: superUserId,
+                tipo: 'egreso',
+                monto: prestamo.saldo,
+                descripcion: `Préstamo otorgado a cliente ${cliente?.nombre || ''}`,                
+                id_prestamo: prestamo._id,                
+                id_cliente: prestamo.id_cliente,
+                id_asesor: prestamo.id_asesor
+            }
+            await registrarMovimiento2(req, { json: () => {} }, session);
 
             //Crear notificacion para el super usuario sobre el prestamo
             const mensaje = generarMensajeNotificacion({
@@ -540,23 +551,33 @@ export const crearTablaAmortizacion = async (req, res) => {
             return res.status(404).json({ message: 'Cliente o asesor no encontrado.' });
         }
 
-        await Wallet.findOneAndUpdate(
-            { owner: superUserId },
-            {
-                $inc: { saldo: -prestamo.saldo },
-                $push: {
-                    movimientos: {
-                        tipo: 'egreso',
-                        monto: prestamo.saldo,
-                        descripcion: `Préstamo otorgado a cliente ${cliente.nombre}`,
-                        id_prestamo: prestamo._id,
-                        id_cliente: prestamo.id_cliente,
-                        id_asesor: prestamo.id_asesor
-                    }
-                }
-            },
-            { session }
-        );
+        // await Wallet.findOneAndUpdate(
+        //     { owner: superUserId },
+        //     {
+        //         $inc: { saldo: -prestamo.saldo },
+        //         $push: {
+        //             movimientos: {
+        //                 tipo: 'egreso',
+        //                 monto: prestamo.saldo,
+        //                 descripcion: `Préstamo otorgado a cliente ${cliente.nombre}`,
+        //                 id_prestamo: prestamo._id,
+        //                 id_cliente: prestamo.id_cliente,
+        //                 id_asesor: prestamo.id_asesor
+        //             }
+        //         }
+        //     },
+        //     { session }
+        // );
+        req.body = {
+            owner: superUserId,
+            tipo: 'egreso',
+            monto: prestamo.saldo,
+            descripcion: `Préstamo otorgado a cliente ${cliente?.nombre || ''}`,
+            id_prestamo: prestamo._id,
+            id_cliente: prestamo.id_cliente,
+            id_asesor: prestamo.id_asesor
+        };
+        await registrarMovimiento2(req, { json: () => {} }, session);
 
         // Crear notificación para el asesor sobre el préstamo aprobado
         const mensaje = generarMensajeNotificacion({
@@ -839,7 +860,7 @@ export const aceptarPagoPrestamo = async (req, res) => {
             id_cliente: prestamo.id_cliente,
             id_asesor: prestamo.id_asesor
         };
-        await registrarMovimiento(req, { json: () => {} });
+        await registrarMovimiento2(req, { json: () => {} });
 
         res.json({
             message: `Pago #${num_pago} aceptado y movimiento registrado en wallet`,

@@ -121,44 +121,65 @@ export const registrarMovimiento = async (req, res) => {
   }
 };
 
-export const registrarMovimiento2 = async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
+export const registrarMovimiento2 = async (req, res, externalSession = null) => {
+  let session = externalSession;
+  let createdSession = false;
+
   try {
+    if (!session) {
+      session = await mongoose.startSession();
+      session.startTransaction();
+      createdSession = true;
+    }
+
     const { owner, tipo, monto, descripcion, id_prestamo, id_cliente, id_asesor, multa, interes } = req.body;
 
     const wallet = await Wallet.findOne({ owner }).session(session);
     if (!wallet) {
-      await session.abortTransaction();
-      session.endSession();
-      return res.status(404).json({ message: 'Wallet no encontrada' });
+      const err = new Error('Wallet no encontrada');
+      if (createdSession) {
+        await session.abortTransaction();
+        session.endSession();
+      }
+      throw err;
     }
 
     // 1) Crear movimiento en colección separada
-    const movimiento = await Movimiento.create([{
+    const movimientoDocs = await Movimiento.create([{
       owner,
       walletId: wallet._id,
       tipo, monto, descripcion, id_prestamo, id_cliente, id_asesor, multa, interes
     }], { session });
 
     // 2) Actualizar saldo de wallet
-    wallet.saldo += (tipo === 'ingreso' ? monto : -monto);
+    const newSaldo = wallet.saldo + (tipo === 'ingreso' ? monto : -monto);
 
-    // 3) Mantener cache de últimos N movimientos (ej: 20)
-    const movId = movimiento[0]._id;
+    // 3) Mantener cache de últimos N movimientos (ej: 10)
+    const movId = movimientoDocs[0]._id;
     await Wallet.findByIdAndUpdate(wallet._id, {
-      $set: { saldo: wallet.saldo },
-      // $push: { recentMovimientos: { $each: [movId], $position: 0, $slice: 20 } }
+      $set: { saldo: newSaldo },
+      $push: { recentMovimientos: { $each: [movId], $position: 0, $slice: 10 } }
     }, { session });
 
-    await session.commitTransaction();
-    session.endSession();
-
-    res.json({ movimiento: movimiento[0], saldo: wallet.saldo });
+    if (createdSession) {
+      await session.commitTransaction();
+      session.endSession();
+      // respuesta HTTP cuando la función es usada directamente por una ruta
+      if (res && typeof res.json === 'function') {
+        return res.json({ movimiento: movimientoDocs[0], saldo: newSaldo });
+      }
+      return { movimiento: movimientoDocs[0], saldo: newSaldo };
+    } else {
+      // si la session viene del caller, retornamos resultado y el caller hará commit/abort
+      return { movimiento: movimientoDocs[0], saldo: newSaldo };
+    }
   } catch (error) {
-    await session.abortTransaction();
-    session.endSession();
-    res.status(500).json({ message: 'Error al registrar movimiento', error: error.message });
+    if (createdSession && session) {
+      await session.abortTransaction();
+      session.endSession();
+    }
+    // Rethrow para que el caller (si comparte session) capture y aborte
+    throw error;
   }
 };
 
