@@ -121,6 +121,47 @@ export const registrarMovimiento = async (req, res) => {
   }
 };
 
+export const registrarMovimiento2 = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  try {
+    const { owner, tipo, monto, descripcion, id_prestamo, id_cliente, id_asesor, multa, interes } = req.body;
+
+    const wallet = await Wallet.findOne({ owner }).session(session);
+    if (!wallet) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ message: 'Wallet no encontrada' });
+    }
+
+    // 1) Crear movimiento en colección separada
+    const movimiento = await Movimiento.create([{
+      owner,
+      walletId: wallet._id,
+      tipo, monto, descripcion, id_prestamo, id_cliente, id_asesor, multa, interes
+    }], { session });
+
+    // 2) Actualizar saldo de wallet
+    wallet.saldo += (tipo === 'ingreso' ? monto : -monto);
+
+    // 3) Mantener cache de últimos N movimientos (ej: 20)
+    const movId = movimiento[0]._id;
+    await Wallet.findByIdAndUpdate(wallet._id, {
+      $set: { saldo: wallet.saldo },
+      // $push: { recentMovimientos: { $each: [movId], $position: 0, $slice: 20 } }
+    }, { session });
+
+    await session.commitTransaction();
+    session.endSession();
+
+    res.json({ movimiento: movimiento[0], saldo: wallet.saldo });
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    res.status(500).json({ message: 'Error al registrar movimiento', error: error.message });
+  }
+};
+
 export const depositarWallet = async (req, res) => {
   try {
     const { owner } = req.params;

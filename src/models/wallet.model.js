@@ -27,7 +27,7 @@ const WalletSchema = mongoose.Schema({
   owner: { type: mongoose.Schema.Types.ObjectId, ref: 'usuarios', required: true }, // Super usuario
   saldo: { type: Number, default: 0 },
   activa: { type: Boolean, default: true },
-  movimientos: [MovimientoSchema],
+  movimientos: [MovimientoSchema], //Esto va a desaparecer para mejor escalabilidad
   guardados: [],
   configuracion: Configuraciones
 }, { timestamps: true });
