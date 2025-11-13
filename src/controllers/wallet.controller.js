@@ -385,8 +385,10 @@ export const obtenerMovimientosGuardados = async (req, res) => {
     const wallet = await Wallet.findOne({ owner });
     if (!wallet) return res.status(404).json({ message: 'Wallet no encontrada' });
 
+    let movimientos = await Movimiento.find({ walletId: wallet._id})
+
     // Busca los movimientos por ID en el array guardados
-    const movimientosGuardados = wallet.movimientos.filter(mov =>
+    const movimientosGuardados = movimientos.filter(mov =>
       wallet.guardados.includes(mov._id.toString())
     );
 
@@ -403,12 +405,15 @@ export const obtenerMovimientosGuardados = async (req, res) => {
 export const obtenerDatosMovimientosGuardados = async (req, res) => {
   try {
     const { owner } = req.params;
-    const wallet = await Wallet.findOne({ owner }).populate('movimientos.id_prestamo movimientos.id_cliente movimientos.id_asesor');
+    const wallet = await Wallet.findOne({ owner })
     if (!wallet) return res.status(404).json({ message: 'Wallet no encontrada' });
+
+    let movimientos = await Movimiento.find({ walletId: wallet._id})
+      .populate('id_cliente id_asesor id_prestamo')
 
     // Obtiene los movimientos completos usando los IDs guardados
     const movimientosGuardados = wallet.guardados
-      .map(id => wallet.movimientos.find(mov => mov._id.toString() === id))
+      .map(id => movimientos.find(mov => mov._id.toString() === id))
       .filter(Boolean);
 
     res.json({ movimientos: movimientosGuardados });
@@ -421,9 +426,13 @@ export const obtenerDatosMovimientosGuardados = async (req, res) => {
 export const obtenerMovimientoPorId = async (req, res) => {
   try {
     const { id } = req.params;
-    const wallet = await Wallet.findOne({ 'movimientos._id': id }).populate('movimientos.id_prestamo movimientos.id_cliente movimientos.id_asesor');
+    const wallet = await Wallet.findOne()
     if (!wallet) return res.status(404).json({ message: 'Movimiento no encontrado' });
-    const movimiento = wallet.movimientos.find(mov => mov._id.toString() === id);
+
+    let movimientos = await Movimiento.find({ walletId: wallet._id})
+      .populate('id_cliente id_asesor id_prestamo')
+
+    const movimiento = movimientos.find(mov => mov._id.toString() === id);
     if (!movimiento) return res.status(404).json({ message: 'Movimiento no encontrado' });
     res.json(movimiento);
   } catch (error) {
