@@ -163,7 +163,7 @@ export const postPrestamo = async (req, res) => {
         // 4. Si el cliente es bueno, regular o excelente, aceptar y crear tabla
         if (estadoCliente && ['Excelente', 'Bueno', 'Regular'].includes(estadoCliente)) {
             estadoPrestamo = 'Aceptado';
-            fecha_prestamo = req.body.fecha_prestamo || new Date().toLocaleDateString('en-CA');
+            fecha_prestamo = new Date();
             tabla_amortizacion = await generarTablaAmor(
                 req.body.saldo,
                 req.body.periodo,
@@ -687,7 +687,7 @@ const generarTablaAmor = async (monto, periodo, fecha, dia_semana) =>{
 const calcularFechas = (fechaInicial, periodo, dia_pago) => { // dia_pago Lunes | Sábado
     //console.log(fechaInicial)
     const fechas = [];
-    const fechaBase = new Date(fechaInicial + 'T00:00:00-06:00'); ///////////////////////////////////////
+    const fechaBase = new Date(fechaInicial); ///////////////////////////////////////
 
     // Si el período es mayor a 6, asumimos que es semanal
     if (periodo > 6) { //Si es mayor a 6 es de 14 semanas

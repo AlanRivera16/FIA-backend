@@ -5,11 +5,15 @@ get http://localhost:3000/historial/user/67784a9308be13c7d8ae3956
 
 ###
 
-GET http://localhost:3000/prestamos
+GET http://localhost:3000/prestamo_by_id/6764980256e075634be2e6b7
+
+
+###
+GET http://localhost:3000/prestamo_by_id/6780425ec750877e2e78e9ad
 
 ###
 
-GET http://localhost:3000/usuarios/clientes/6463e9fb20a73c4bfb7c5483
+GET http://localhost:3000/usuarios/clientes/677ed60b31afa8b38d16303c
 
 
 ###
@@ -30,12 +34,23 @@ Content-Type: application/json
 }
 
 ###
-
-
-POST http://localhost:3000/usuarios/img
-Content-Disposition: form-data; name="image"; filename="1.png"
-Content-Type: image/png
+POST http://localhost:8382/wallet/iniciar-wallet
+Content-Type: application/json
 
 {
+    "owner": "688da59bfb293ae6030bc09f",
+    "saldoInicial": 24000,
+}
 
+
+###
+POST http://localhost:8382/prestamo
+Content-Type: application/json
+
+{
+    "saldo": 2000,
+    "periodo": 14,
+    "id_asesor": "68aab15fded423d919fb3b46",
+    "id_cliente": "69029ca57fa4dba77d33d1fd",
+    "dia_pago": "Lunes",
 }

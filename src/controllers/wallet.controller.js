@@ -1,16 +1,53 @@
 // src/controllers/wallet.controller.js
 import Wallet from '../models/wallet.model.js';
+import Movimiento from '../models/movimientos.model.js'; // nuevo modelo
+import mongoose from 'mongoose';
 //import { Parser } from 'json2csv';
+
+// export const getWalletInfo = async (req, res) => {
+//   try {
+//     const { owner } = req.params;
+//     const wallet = await Wallet.findOne({ owner }).populate('movimientos.id_prestamo movimientos.id_cliente movimientos.id_asesor recentMovimientos');
+//     res.json(wallet);
+//   } catch (error) {
+//     res.status(500).json({ message: 'Error al obtener wallet', error: error.message });
+//   }
+// };
 
 export const getWalletInfo = async (req, res) => {
   try {
     const { owner } = req.params;
-    const wallet = await Wallet.findOne({ owner }).populate('movimientos.id_prestamo movimientos.id_cliente movimientos.id_asesor');
+    const wallet = await Wallet.findOne({ owner })
+    if (!wallet) return res.status(404).json({ message: 'Wallet no encontrada' });
+    
+    const movimientosGenerales = await Movimiento.find({ walletId: wallet._id })
+    wallet.movimientos = movimientosGenerales
+    
     res.json(wallet);
   } catch (error) {
     res.status(500).json({ message: 'Error al obtener wallet', error: error.message });
   }
 };
+
+// export const getWalletInfo = async (req, res) => {
+//   try {
+//     const { owner } = req.params;
+//     // Popula los objetos Movimiento y, dentro de ellos, los refs anidados
+//     const wallet = await Wallet.findOne({ owner }).populate({
+//       path: 'recentMovimientos',
+//       populate: [
+//         { path: 'id_cliente', select: 'nombre evidencia_aval telefono email' },
+//         { path: 'id_asesor', select: 'nombre evidencia_aval role' },
+//         //{ path: 'id_prestamo' } // puedes seleccionar campos específicos si quieres
+//       ]
+//     });
+//     if (!wallet) return res.status(404).json({ message: 'Wallet no encontrada' });
+//     res.json(wallet);
+//   } catch (error) {
+//     res.status(500).json({ message: 'Error al obtener wallet', error: error.message });
+//   }
+// };
+// ...existing code...
 
 export const obtenerMovimientos = async (req, res) => {
   try {
@@ -29,10 +66,16 @@ export const obtenerMovimientos = async (req, res) => {
     }
 
     // Busca la wallet y filtra los movimientos
-    const wallet = await Wallet.findOne({ owner }).populate('movimientos.id_prestamo movimientos.id_cliente movimientos.id_asesor');
+    // const wallet = await Wallet.findOne({ owner }).populate('movimientos.id_prestamo movimientos.id_cliente movimientos.id_asesor');
+    // if (!wallet) return res.status(404).json({ message: 'Wallet no encontrada' });
+    const wallet = await Wallet.findOne({ owner })
     if (!wallet) return res.status(404).json({ message: 'Wallet no encontrada' });
 
-    let movimientos = wallet.movimientos.filter(mov => {
+    let movimientosCollection = await Movimiento.find({ walletId: wallet._id})
+      .populate('id_cliente id_asesor id_prestamo')
+    //console.log(movimientosCollection)
+
+    let movimientos = movimientosCollection.filter(mov => {
       let valido = true;
       // Fecha inicio
       if (fechaInicio) {
@@ -183,53 +226,141 @@ export const registrarMovimiento2 = async (req, res, externalSession = null) => 
   }
 };
 
+// export const depositarWallet = async (req, res) => {
+//   try {
+//     const { owner } = req.params;
+//     const { monto, descripcion } = req.body;
+//     if (monto <= 0) return res.status(400).json({ message: 'El monto debe ser mayor a cero.' });
+
+//     const wallet = await Wallet.findOneAndUpdate(
+//       { owner },
+//       {
+//         $inc: { saldo: monto },
+//         $push: {
+//           movimientos: {
+//             tipo: 'ingreso',
+//             monto,
+//             descripcion: descripcion || 'Depósito manual'
+//           }
+//         }
+//       },
+//       { new: true }
+//     );
+//     if (!wallet) return res.status(404).json({ message: 'Wallet no encontrada' });
+//     res.json(wallet);
+//   } catch (error) {
+//     res.status(500).json({ message: 'Error al depositar en la wallet', error: error.message });
+//   }
+// };
+
+// export const retirarWallet = async (req, res) => {
+//   try {
+//     const { owner } = req.params;
+//     const { monto, descripcion } = req.body;
+//     if (monto <= 0) return res.status(400).json({ message: 'El monto debe ser mayor a cero.' });
+
+//     const wallet = await Wallet.findOne({ owner });
+//     if (!wallet) return res.status(404).json({ message: 'Wallet no encontrada' });
+//     if (wallet.saldo < monto) return res.status(400).json({ message: 'Saldo insuficiente.' });
+
+//     wallet.saldo -= monto;
+//     wallet.movimientos.push({
+//       tipo: 'egreso',
+//       monto,
+//       descripcion: descripcion || 'Retiro manual'
+//     });
+//     await wallet.save();
+//     res.json(wallet);
+//   } catch (error) {
+//     res.status(500).json({ message: 'Error al retirar de la wallet', error: error.message });
+//   }
+// };
+
+// ...existing code...
+
 export const depositarWallet = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
   try {
     const { owner } = req.params;
     const { monto, descripcion } = req.body;
-    if (monto <= 0) return res.status(400).json({ message: 'El monto debe ser mayor a cero.' });
+    if (!monto || monto <= 0) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ message: 'El monto debe ser mayor a cero.' });
+    }
 
-    const wallet = await Wallet.findOneAndUpdate(
-      { owner },
-      {
-        $inc: { saldo: monto },
-        $push: {
-          movimientos: {
-            tipo: 'ingreso',
-            monto,
-            descripcion: descripcion || 'Depósito manual'
-          }
-        }
-      },
-      { new: true }
-    );
-    if (!wallet) return res.status(404).json({ message: 'Wallet no encontrada' });
-    res.json(wallet);
+    const wallet = await Wallet.findOne({ owner }).session(session);
+    if (!wallet) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ message: 'Wallet no encontrada' });
+    }
+
+    // Prepara payload para registrarMovimiento2
+    const payload = {
+      owner,
+      tipo: 'ingreso',
+      monto,
+      descripcion: descripcion || 'Depósito manual'
+    };
+
+    // registrarMovimiento2 acepta una session externa y no commitea cuando se la pasamos
+    const result = await registrarMovimiento2({ body: payload }, null, session);
+
+    await session.commitTransaction();
+    session.endSession();
+
+    return res.json(result);
   } catch (error) {
-    res.status(500).json({ message: 'Error al depositar en la wallet', error: error.message });
+    await session.abortTransaction();
+    session.endSession();
+    return res.status(500).json({ message: 'Error al depositar en la wallet', error: error.message });
   }
 };
 
 export const retirarWallet = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
   try {
     const { owner } = req.params;
     const { monto, descripcion } = req.body;
-    if (monto <= 0) return res.status(400).json({ message: 'El monto debe ser mayor a cero.' });
+    if (!monto || monto <= 0) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ message: 'El monto debe ser mayor a cero.' });
+    }
 
-    const wallet = await Wallet.findOne({ owner });
-    if (!wallet) return res.status(404).json({ message: 'Wallet no encontrada' });
-    if (wallet.saldo < monto) return res.status(400).json({ message: 'Saldo insuficiente.' });
+    const wallet = await Wallet.findOne({ owner }).session(session);
+    if (!wallet) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ message: 'Wallet no encontrada' });
+    }
 
-    wallet.saldo -= monto;
-    wallet.movimientos.push({
+    if (wallet.saldo < monto) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ message: 'Saldo insuficiente.' });
+    }
+
+    const payload = {
+      owner,
       tipo: 'egreso',
       monto,
       descripcion: descripcion || 'Retiro manual'
-    });
-    await wallet.save();
-    res.json(wallet);
+    };
+
+    const result = await registrarMovimiento2({ body: payload }, null, session);
+
+    await session.commitTransaction();
+    session.endSession();
+
+    return res.json(result);
   } catch (error) {
-    res.status(500).json({ message: 'Error al retirar de la wallet', error: error.message });
+    await session.abortTransaction();
+    session.endSession();
+    return res.status(500).json({ message: 'Error al retirar de la wallet', error: error.message });
   }
 };
 
