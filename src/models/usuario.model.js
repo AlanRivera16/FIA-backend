@@ -55,11 +55,11 @@ const UserSchema = mongoose.Schema({
     },
     telefono: {
         type: Number,
-        require: true
+        require: false
     },
     direccion: {
         type: String,
-        require: true
+        require: false
     },
     id_historial: {
         type: mongoose.Schema.Types.ObjectId,
@@ -80,7 +80,7 @@ const UserSchema = mongoose.Schema({
         },
         email_aval: {
             type: String,
-            unique: true,
+            unique: false,
             required: false
         },
         telefono_aval: {
